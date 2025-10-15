@@ -25,6 +25,7 @@ include_directories(
 
 add_executable(AR_A4_Video
   src/main.cpp
+
   src/ar/calib.cpp
   src/ar/pose.cpp
   src/detect/a4.cpp

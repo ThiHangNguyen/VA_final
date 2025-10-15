@@ -1,17 +1,17 @@
-#include <opencv2/opencv.hpp>
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
+#include <opencv2/opencv.hpp>      // OpenCV pour traitement d'image et capture vidéo
+#include <GL/glew.h>               // GLEW pour charger les extensions OpenGL
+#include <GLFW/glfw3.h>            // GLFW pour la gestion de la fenêtre et du contexte OpenGL
+#include <glm/glm.hpp>             // GLM pour les opérations matricielles (maths 3D)
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "ar/calib.hpp"
-#include "ar/pose.hpp"
-#include "detect/a4.hpp"
-#include "glx/mesh.hpp"
-#include "glx/shaders.hpp"
-#include "glx/texture.hpp"
-#include "glx/cleanup.hpp"
+#include "ar/calib.hpp"            // Chargement des paramètres de calibration
+#include "ar/pose.hpp"             // Projection / View OpenGL à partir de rvec/tvec
+#include "detect/a4.hpp"          // Détection des coins de la feuille A4
+#include "glx/mesh.hpp"           // Création des maillages 3D
+#include "glx/shaders.hpp"        // Compilation / linkage des shaders
+#include "glx/texture.hpp"        // Gestion de la texture
+#include "glx/cleanup.hpp"        // Nettoyage à la fin
 
 #include <iostream>
 #include <stdexcept>
@@ -19,74 +19,77 @@
 
 int main(int argc, char** argv) {
   try {
-    // --- Source vidéo : webcam ou fichier ---
+    // --- Lecture des arguments : choix entre webcam ou vidéo ---
     std::string calibPath;
     cv::VideoCapture cap;
     bool useWebcam = (argc > 1 && std::string(argv[1]) == "--webcam");
 
-    std::string videoPath = "../data/Video_AR_1.mp4";       // par défaut
-calibPath = "../data/camera.yaml";                      // par défaut
+    std::string videoPath = "../data/Video_AR_1.mp4";       // Par défaut : chemin de la vidéo
+    calibPath = "../data/camera.yaml";                      // Par défaut : calibration
 
-if (argc > 1) {
-    std::string arg1 = argv[1];
-    if (arg1 == "--webcam") {
-        useWebcam = true;
-        calibPath = "../data/camera_webcam.yaml";
-    } else if (arg1 == "--video") {
-        if (argc < 4) {
-            std::cerr << "Usage: ./AR_A4_Video --video <video_path> <calibration_path>\n";
+    // --- Interprétation des arguments ---
+    if (argc > 1) {
+        std::string arg1 = argv[1];
+        if (arg1 == "--webcam") {
+            useWebcam = true;
+            calibPath = "../data/camera_webcam.yaml";
+        } else if (arg1 == "--video") {
+            if (argc < 4) {
+                std::cerr << "Usage: ./AR_A4_Video --video <video_path> <calibration_path>\n";
+                return -1;
+            }
+            videoPath = argv[2];
+            calibPath = argv[3];
+        } else {
+            std::cerr << "Argument inconnu : " << arg1 << "\n";
+            std::cerr << "Utilisation :\n";
+            std::cerr << "  ./AR_A4_Video --webcam\n";
+            std::cerr << "  ./AR_A4_Video --video <video_path> <calibration_path>\n";
             return -1;
         }
-        videoPath = argv[2];
-        calibPath = argv[3];
-    } else {
-        std::cerr << "Argument inconnu : " << arg1 << "\n";
-        std::cerr << "Utilisation :\n";
-        std::cerr << "  ./AR_A4_Video --webcam\n";
-        std::cerr << "  ./AR_A4_Video --video <video_path> <calibration_path>\n";
-        return -1;
-    }
-}
-
-// --- Ouverture vidéo ou webcam ---
-if (useWebcam) {
-    int camIndex = 0;
-    int reqW = 1280, reqH = 720, reqFPS = 30;
-
-    if (!cap.open(camIndex, cv::CAP_V4L2)) {
-        std::cerr << "Erreur : webcam non accessible !\n";
-        return -1;
     }
 
-    cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
-    cap.set(cv::CAP_PROP_FRAME_WIDTH,  reqW);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, reqH);
-    cap.set(cv::CAP_PROP_FPS,          reqFPS);
+    // --- Ouverture de la source vidéo ---
+    if (useWebcam) {
+        int camIndex = 0;
+        int reqW = 1280, reqH = 720, reqFPS = 30;
 
-    if ((int)cap.get(cv::CAP_PROP_FRAME_WIDTH) != reqW ||
-        (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT) != reqH ||
-        (int)std::round(cap.get(cv::CAP_PROP_FPS)) != reqFPS) {
-        cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('Y','U','Y','V'));
+        if (!cap.open(camIndex, cv::CAP_V4L2)) {
+            std::cerr << "Erreur : webcam non accessible !\n";
+            return -1;
+        }
+
+        // Premier essai avec MJPEG
+        cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
         cap.set(cv::CAP_PROP_FRAME_WIDTH,  reqW);
         cap.set(cv::CAP_PROP_FRAME_HEIGHT, reqH);
         cap.set(cv::CAP_PROP_FPS,          reqFPS);
-    }
 
-    std::cout << "[INFO] Webcam ouverte => "
-              << (int)cap.get(cv::CAP_PROP_FRAME_WIDTH) << "x"
-              << (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ "
-              << (int)cap.get(cv::CAP_PROP_FPS) << " FPS\n";
-} else {
-    if (!cap.open(videoPath)) {
-        std::cerr << "Erreur : impossible d’ouvrir la vidéo : " << videoPath << "\n";
-        return -1;
+        // Si échec, fallback YUYV
+        if ((int)cap.get(cv::CAP_PROP_FRAME_WIDTH) != reqW ||
+            (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT) != reqH ||
+            (int)std::round(cap.get(cv::CAP_PROP_FPS)) != reqFPS) {
+            cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('Y','U','Y','V'));
+            cap.set(cv::CAP_PROP_FRAME_WIDTH,  reqW);
+            cap.set(cv::CAP_PROP_FRAME_HEIGHT, reqH);
+            cap.set(cv::CAP_PROP_FPS,          reqFPS);
+        }
+
+        std::cout << "[INFO] Webcam ouverte => "
+                  << (int)cap.get(cv::CAP_PROP_FRAME_WIDTH) << "x"
+                  << (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ "
+                  << (int)cap.get(cv::CAP_PROP_FPS) << " FPS\n";
+    } else {
+        if (!cap.open(videoPath)) {
+            std::cerr << "Erreur : impossible d’ouvrir la vidéo : " << videoPath << "\n";
+            return -1;
+        }
     }
-}
 
     // --- Chargement calibration ---
     const ar::Calibration calib = ar::loadCalibration(calibPath);
 
-    // Première frame
+    // --- Lecture de la première frame ---
     cv::Mat frameBGR;
     if (!cap.read(frameBGR) || frameBGR.empty()) {
       std::cerr << "Erreur : première frame vide !\n";
@@ -94,7 +97,7 @@ if (useWebcam) {
     }
     int vw = frameBGR.cols, vh = frameBGR.rows;
 
-    // --- Init GLFW/GL ---
+    // --- Initialisation GLFW + fenêtre ---
     if (!glfwInit()) return -1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -108,7 +111,7 @@ if (useWebcam) {
 
     glewExperimental = GL_TRUE;
     if (glewInit() != GLEW_OK) { std::cerr << "GLEW init failed\n"; return -1; }
-    glGetError();
+    glGetError(); // Ignore l'erreur générée par glewInit
 
     // --- Shaders ---
     GLuint bgVS = glx::compile(GL_VERTEX_SHADER,   glx::BG_VS);
@@ -122,12 +125,12 @@ if (useWebcam) {
     GLuint lineProgram = glx::link({ lineVS, lineGS, lineFS });
     glDeleteShader(lineVS); glDeleteShader(lineGS); glDeleteShader(lineFS);
 
-    // --- Meshes ---
+    // --- Meshes (quad fond, cube, axes) ---
     glx::Mesh bg   = glx::createBackgroundQuad();
     glx::Mesh cube = glx::createCubeWireframe(30.0f);
     glx::Axes axes = glx::createAxes(210.0f);
 
-    // --- Texture ---
+    // --- Texture pour la frame vidéo ---
     cv::Mat frameRGBA;
     cv::cvtColor(frameBGR, frameRGBA, cv::COLOR_BGR2RGBA);
     GLuint bgTex = glx::createTextureRGBA(frameRGBA.cols, frameRGBA.rows);
@@ -135,16 +138,15 @@ if (useWebcam) {
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.05f, 0.05f, 0.06f, 1.0f);
 
-    // Uniforms
+    // --- Uniforms pour les shaders ---
     GLint bg_uTex         = glGetUniformLocation(bgProgram,   "uTex");
     GLint line_uMVP       = glGetUniformLocation(lineProgram, "uMVP");
     GLint line_uColor     = glGetUniformLocation(lineProgram, "uColor");
     GLint line_uThickness = glGetUniformLocation(lineProgram, "uThicknessPx");
     GLint line_uViewport  = glGetUniformLocation(lineProgram, "uViewport");
-
     const float THICKNESS_PX = 3.0f;
 
-    // Référentiel A4 (mm)
+    // --- Coordonnées 3D de la feuille A4 ---
     const float W = 210.f, H = 297.f;
     std::vector<cv::Point3f> objectPts = {
       {-W*0.5f, -H*0.5f, 0.0f},
@@ -153,8 +155,9 @@ if (useWebcam) {
       {-W*0.5f, +H*0.5f, 0.0f}
     };
 
-    cv::Mat rvec, tvec;
+    cv::Mat rvec, tvec; // Rotation et translation
 
+    // === BOUCLE PRINCIPALE ===
     while (!glfwWindowShouldClose(window)) {
       if (!cap.read(frameBGR) || frameBGR.empty()) break;
 
@@ -166,9 +169,11 @@ if (useWebcam) {
                      rvec, tvec, !rvec.empty(), cv::SOLVEPNP_ITERATIVE);
       }
 
+      // Conversion + flip (OpenGL en bas à gauche)
       cv::cvtColor(frameBGR, frameRGBA, cv::COLOR_BGR2RGBA);
       cv::flip(frameRGBA, frameRGBA, 0);
 
+      // Resize si résolution change (webcam)
       static int texW = frameRGBA.cols, texH = frameRGBA.rows;
       if (frameRGBA.cols != texW || frameRGBA.rows != texH) {
         glDeleteTextures(1, &bgTex);
@@ -177,14 +182,14 @@ if (useWebcam) {
       }
       glx::updateTextureRGBA(bgTex, frameRGBA);
 
-      // Rendu
+      // === RENDU OPENGL ===
       glfwPollEvents();
       int fbw, fbh;
       glfwGetFramebufferSize(window, &fbw, &fbh);
       glViewport(0, 0, fbw, fbh);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-      // 1) Background
+      // --- 1. Fond vidéo ---
       glDisable(GL_DEPTH_TEST);
       glUseProgram(bgProgram);
       glActiveTexture(GL_TEXTURE0);
@@ -194,7 +199,7 @@ if (useWebcam) {
       glDrawArrays(GL_TRIANGLES, 0, bg.count);
       glBindVertexArray(0);
 
-      // 2) Cube + axes
+      // --- 2. Cube et axes ---
       glEnable(GL_DEPTH_TEST);
       glm::mat4 P = ar::projectionFromCV(calib.cameraMatrix, (float)fbw, (float)fbh, 0.1f, 2000.0f);
       glm::mat4 V = ar::viewFromRvecTvec(rvec, tvec);
@@ -222,7 +227,7 @@ if (useWebcam) {
       glfwSwapBuffers(window);
     }
 
-    // Clean
+    // --- Nettoyage OpenGL ---
     glx::cleanup(bgProgram, lineProgram, bgTex, bg, cube, axes, window);
     return 0;
 
