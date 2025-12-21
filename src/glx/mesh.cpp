@@ -1,5 +1,8 @@
 #include "glx/mesh.hpp"
 #include <vector>
+#include <array>        // OBLIGATOIRE pour std::array
+#include <glm/glm.hpp>  // OBLIGATOIRE pour glm::vec3
+
 
 namespace glx {
 
@@ -105,6 +108,116 @@ Axes createAxes(float L) {
   A.z = makeLine(0,0,0, 0,0,L);
 
   return A;
+}
+
+// ========================================================
+//  CRÉATION D’UN MUR SIMPLE (segment 3D + hauteur)
+// ========================================================
+Mesh createWall(float x1, float y1, float x2, float y2, float height)
+{
+    glm::vec3 p1(x1, y1, 0.f);
+    glm::vec3 p2(x2, y2, 0.f);
+    glm::vec3 p3(x1, y1, height);
+    glm::vec3 p4(x2, y2, height);
+
+    float V[] = {
+        p1.x, p1.y, p1.z,
+        p2.x, p2.y, p2.z,
+        p3.x, p3.y, p3.z,
+        p4.x, p4.y, p4.z
+    };
+
+    GLuint E[] = {
+        0,1,
+        2,3,
+        0,2,
+        1,3
+    };
+
+    Mesh m;
+    m.count = 8;   // 4 segments → 8 indices
+
+    glGenVertexArrays(1, &m.vao);
+    glGenBuffers(1, &m.vbo);
+    glGenBuffers(1, &m.ebo);
+
+    glBindVertexArray(m.vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(V), V, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(E), E, GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,3*sizeof(float),(void*)0);
+
+    glBindVertexArray(0);
+    return m;
+}
+
+
+// ========================================================
+//  CRÉATION DE PLUSIEURS MURS EN UN SEUL MESH
+// ========================================================
+Mesh createWalls(const std::vector<std::array<float,4>>& segments,
+                 float height)
+{
+    std::vector<float> vertices;
+    std::vector<GLuint> indices;
+
+    GLuint indexOffset = 0;
+
+    for (auto& s : segments)
+    {
+        float x1 = s[0], y1 = s[1];
+        float x2 = s[2], y2 = s[3];
+
+        float V[] = {
+            x1,y1,0.f,
+            x2,y2,0.f,
+            x1,y1,height,
+            x2,y2,height
+        };
+
+        vertices.insert(vertices.end(), V, V+12);
+
+        GLuint E[] = {
+            indexOffset+0, indexOffset+1, indexOffset+2,
+            indexOffset+1, indexOffset+3, indexOffset+2
+        };
+
+        indices.insert(indices.end(), E, E+6);
+
+        indexOffset += 4;
+    }
+
+    Mesh m;
+    m.count = indices.size();
+
+    glGenVertexArrays(1, &m.vao);
+    glGenBuffers(1, &m.vbo);
+    glGenBuffers(1, &m.ebo);
+
+    glBindVertexArray(m.vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
+    glBufferData(GL_ARRAY_BUFFER,
+                 vertices.size()*sizeof(float),
+                 vertices.data(),
+                 GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                 indices.size()*sizeof(GLuint),
+                 indices.data(),
+                 GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,3*sizeof(float),(void*)0);
+
+    glBindVertexArray(0);
+    return m;
 }
 
 } // namespace glx

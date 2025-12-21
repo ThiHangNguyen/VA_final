@@ -5,8 +5,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "ar/calib.hpp"           // Chargement des paramètres de calibration
-#include "ar/pose.hpp"            // Projection / View OpenGL à partir de rvec/tvec
+#include "ar/calib.hpp"            // Chargement des paramètres de calibration
+#include "ar/pose.hpp"             // Projection / View OpenGL à partir de rvec/tvec
 #include "detect/a4.hpp"          // Détection des coins de la feuille A4
 #include "glx/mesh.hpp"           // Création des maillages 3D
 #include "glx/shaders.hpp"        // Compilation / linkage des shaders
@@ -125,36 +125,10 @@ int main(int argc, char** argv) {
     GLuint lineProgram = glx::link({ lineVS, lineGS, lineFS });
     glDeleteShader(lineVS); glDeleteShader(lineGS); glDeleteShader(lineFS);
 
-    GLuint solidVS = glx::compile(GL_VERTEX_SHADER, glx::SOLID_VS);
-    GLuint solidFS = glx::compile(GL_FRAGMENT_SHADER, glx::SOLID_FS);
-    GLuint solidProgram = glx::link({solidVS, solidFS});
-    glDeleteShader(solidVS);
-    glDeleteShader(solidFS);
-
     // --- Meshes (quad fond, cube, axes) ---
     glx::Mesh bg   = glx::createBackgroundQuad();
-    // glx::Mesh cube = glx::createCubeWireframe(30.0f);
+    glx::Mesh cube = glx::createCubeWireframe(30.0f);
     glx::Axes axes = glx::createAxes(210.0f);
-    // petite croix pour représenter la balle
-    glx::Axes ballAxes = glx::createAxes(10.f);
-
-    // === murs sur les bords A4 ===
-    std::vector<std::array<float,4>> wallSegments = {
-        // bas
-        {-105.f, -148.5f, +105.f, -148.5f},
-        // droite
-        {+105.f, -148.5f, +105.f, +148.5f},
-        // haut
-        {+105.f, +148.5f, -105.f, +148.5f},
-        // gauche
-        {-105.f, +148.5f, -105.f, -148.5f}
-    };
-
-    // hauteur du mur = 40 mm par exemple
-    float WALL_HEIGHT = 40.f;
-
-    // création d’un seul mesh contenant tous les murs
-    glx::Mesh wallsMesh = glx::createWalls(wallSegments, WALL_HEIGHT);
 
     // --- Texture pour la frame vidéo ---
     cv::Mat frameRGBA;
@@ -172,9 +146,6 @@ int main(int argc, char** argv) {
     GLint line_uViewport  = glGetUniformLocation(lineProgram, "uViewport");
     const float THICKNESS_PX = 3.0f;
 
-    GLint solid_uMVP   = glGetUniformLocation(solidProgram, "uMVP");
-    GLint solid_uColor = glGetUniformLocation(solidProgram, "uColor");
-
     // --- Coordonnées 3D de la feuille A4 ---
     const float W = 210.f, H = 297.f;
     std::vector<cv::Point3f> objectPts = {
@@ -185,14 +156,6 @@ int main(int argc, char** argv) {
     };
 
     cv::Mat rvec, tvec; // Rotation et translation
-    // =========================
-    // BALLE (état logique)
-    // =========================
-    glm::vec3 ballPos(0.f, 0.f, 8.f);   // centre balle
-    glm::vec3 ballVel(0.f);
-    float ballRadius = 8.f;
-
-    double lastT = glfwGetTime();
 
     // === BOUCLE PRINCIPALE ===
     while (!glfwWindowShouldClose(window)) {
@@ -204,73 +167,6 @@ int main(int argc, char** argv) {
       if (okDetect) {
         cv::solvePnP(objectPts, imagePts, calib.cameraMatrix, calib.distCoeffs,
                      rvec, tvec, !rvec.empty(), cv::SOLVEPNP_ITERATIVE);
-      }
-      // =========================
-      // PHYSIQUE BALLE
-      // =========================
-      double nowT = glfwGetTime();
-      float dt = float(nowT - lastT);
-      lastT = nowT;
-      if (dt > 0.05f) dt = 0.05f;
-
-      if (okDetect && !rvec.empty()) {
-
-          cv::Mat Rcv;
-          cv::Rodrigues(rvec, Rcv);
-
-          // Axes feuille (repère caméra)
-          glm::vec3 X(
-              Rcv.at<double>(0,0),
-              Rcv.at<double>(1,0),
-              Rcv.at<double>(2,0)
-          );
-          glm::vec3 Y(
-              Rcv.at<double>(0,1),
-              Rcv.at<double>(1,1),
-              Rcv.at<double>(2,1)
-          );
-          glm::vec3 N(
-              Rcv.at<double>(0,2),
-              Rcv.at<double>(1,2),
-              Rcv.at<double>(2,2)
-          );
-
-          // Normalisation OBLIGATOIRE
-          X = glm::normalize(X);
-          Y = glm::normalize(Y);
-          N = glm::normalize(N);
-
-          // Gravité monde (choix arbitraire mais stable)
-          // OpenCV : Y vers le bas
-          glm::vec3 gCam(0.f, 1.f, 0.f);
-
-          // Projection de la gravité sur le plan
-          glm::vec3 gPlane = gCam - glm::dot(gCam, N) * N;
-
-          // Accélération dans le plan (repère feuille)
-          float ax = glm::dot(gPlane, X);
-          float ay = glm::dot(gPlane, Y);
-
-          float accel = 800.f;   // plus réaliste
-          float damping = 6.f;
-
-          ballVel += accel * glm::vec3(ax, ay, 0.f) * dt;
-          ballVel *= 1.f / (1.f + damping * dt);
-          ballPos += ballVel * dt;
-
-          // Limites feuille A4
-          float minX = -105.f + ballRadius;
-          float maxX =  105.f - ballRadius;
-          float minY = -148.5f + ballRadius;
-          float maxY =  148.5f - ballRadius;
-
-          // Collisions
-          if (ballPos.x < minX) { ballPos.x = minX; ballVel.x *= -0.5f; }
-          if (ballPos.x > maxX) { ballPos.x = maxX; ballVel.x *= -0.5f; }
-          if (ballPos.y < minY) { ballPos.y = minY; ballVel.y *= -0.5f; }
-          if (ballPos.y > maxY) { ballPos.y = maxY; ballVel.y *= -0.5f; }
-
-          ballPos.z = ballRadius;
       }
 
       // Conversion + flip (OpenGL en bas à gauche)
@@ -314,79 +210,25 @@ int main(int argc, char** argv) {
       glUniform2f(line_uViewport, (float)fbw, (float)fbh);
       glUniform1f(line_uThickness, THICKNESS_PX);
 
-      // === MURS ===
-      glUseProgram(solidProgram);
-
-      glm::mat4 MVP_walls = P * V;
-      glUniformMatrix4fv(solid_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_walls));
-      glUniform3f(solid_uColor, 0.2f, 1.0f, 1.0f);
-
-      glBindVertexArray(wallsMesh.vao);
-      glDrawElements(GL_TRIANGLES, wallsMesh.count, GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-
-      
-      glUseProgram(lineProgram);
-      glUniform2f(line_uViewport, (float)fbw, (float)fbh);
-      glUniform1f(line_uThickness, THICKNESS_PX);
-      // =========================
-      // RENDU BALLE (croix)
-      // =========================
-      glUseProgram(lineProgram);
-      glUniform2f(line_uViewport, (float)fbw, (float)fbh);
-      glUniform1f(line_uThickness, THICKNESS_PX);
-
-      glm::mat4 M_ball = glm::translate(glm::mat4(1.f), ballPos);
-      glm::mat4 MVP_ball = P * V * M_ball;
-      glUniformMatrix4fv(line_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_ball));
-
-      // jaune
-      glUniform3f(line_uColor, 1.f, 1.f, 0.f);
-
-      glBindVertexArray(ballAxes.x.vao);
-      glDrawArrays(GL_LINES, 0, ballAxes.x.count);
-
-      glBindVertexArray(ballAxes.y.vao);
-      glDrawArrays(GL_LINES, 0, ballAxes.y.count);
-
-      glBindVertexArray(ballAxes.z.vao);
-      glDrawArrays(GL_LINES, 0, ballAxes.z.count);
-
-      glBindVertexArray(0);
-      
-      // === AXES ===
-      glm::mat4 MVP_axes = P * V;
+      glm::mat4 MVP_axes = P * V * M_axes;
       glUniformMatrix4fv(line_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_axes));
-
-      // Axe X — rouge
-      glUniform3f(line_uColor, 1.f, 0.f, 0.f);
-      glBindVertexArray(axes.x.vao);
-      glDrawArrays(GL_LINES, 0, axes.x.count);
-
-      // Axe Y — vert
-      glUniform3f(line_uColor, 0.f, 1.f, 0.f);
-      glBindVertexArray(axes.y.vao);
-      glDrawArrays(GL_LINES, 0, axes.y.count);
-
-      // Axe Z — bleu
-      glUniform3f(line_uColor, 0.f, 0.f, 1.f);
-      glBindVertexArray(axes.z.vao);
-      glDrawArrays(GL_LINES, 0, axes.z.count);
-
+      glBindVertexArray(axes.x.vao); glUniform3f(line_uColor, 1.f, 0.f, 0.f); glDrawArrays(GL_LINES, 0, axes.x.count);
+      glBindVertexArray(axes.y.vao); glUniform3f(line_uColor, 0.f, 1.f, 0.f); glDrawArrays(GL_LINES, 0, axes.y.count);
+      glBindVertexArray(axes.z.vao); glUniform3f(line_uColor, 0.f, 0.f, 1.f); glDrawArrays(GL_LINES, 0, axes.z.count);
       glBindVertexArray(0);
 
-      // glm::mat4 MVP_cube = P * V * M_cube;
-      // glUniformMatrix4fv(line_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_cube));
-      // glUniform3f(line_uColor, 0.f, 0.f, 0.f);
-      // glBindVertexArray(cube.vao);
-      // glDrawElements(GL_LINES, cube.count, GL_UNSIGNED_INT, 0);
-      // glBindVertexArray(0);
-      
+      glm::mat4 MVP_cube = P * V * M_cube;
+      glUniformMatrix4fv(line_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_cube));
+      glUniform3f(line_uColor, 0.f, 0.f, 0.f);
+      glBindVertexArray(cube.vao);
+      glDrawElements(GL_LINES, cube.count, GL_UNSIGNED_INT, 0);
+      glBindVertexArray(0);
+
       glfwSwapBuffers(window);
     }
 
     // --- Nettoyage OpenGL ---
-    glx::cleanup(bgProgram, lineProgram, solidProgram, bgTex, bg, wallsMesh, axes, window);
+    glx::cleanup(bgProgram, lineProgram, bgTex, bg, cube, axes, window);
     return 0;
 
   } catch (const std::exception& e) {
