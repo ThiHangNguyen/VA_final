@@ -43,5 +43,6 @@ void main() {
     FragColor = texture(uWallTex, vUV);
 }
 )";
-
+extern const char* const TEX_OBJ_VS;
+extern const char* const TEX_OBJ_FS;
 } // namespace glx

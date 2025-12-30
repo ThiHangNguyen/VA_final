@@ -11,11 +11,14 @@
 #include "glx/mesh.hpp"           // Création des maillages 3D
 #include "glx/shaders.hpp"        // Compilation / linkage des shaders
 #include "glx/texture.hpp"        // Gestion de la texture
+#include "ar/physics.hpp"        // Gestion des collisions
 #include "glx/cleanup.hpp"        // Nettoyage à la fin
 
 #include <iostream>
 #include <stdexcept>
 #include <vector>
+
+
 
 int main(int argc, char** argv) {
   try {
@@ -188,12 +191,28 @@ int main(int argc, char** argv) {
     // =========================
     // BALLE (état logique)
     // =========================
-    glm::vec3 ballPos(0.f, 0.f, 8.f);   // centre balle
-    glm::vec3 ballVel(0.f);
-    float ballRadius = 8.f;
+    glm::vec3 ballPos(0.f, 0.f, 8.f);   // Position initiale
+    glm::vec3 ballVel(0.f);             // Vitesse
+    float ballRadius = 8.f;             // Rayon
+    // 1. Charger le Shader de Texture
+    GLuint texObjVS = glx::compile(GL_VERTEX_SHADER, glx::TEX_OBJ_VS);
+    GLuint texObjFS = glx::compile(GL_FRAGMENT_SHADER, glx::TEX_OBJ_FS);
+    GLuint texObjProgram = glx::link({texObjVS, texObjFS});
+    GLint texObj_uMVP = glGetUniformLocation(texObjProgram, "uMVP");
+    GLint texObj_uTex = glGetUniformLocation(texObjProgram, "uTex");
 
+    // 2. Créer la sphère
+    glx::Mesh ballMesh = glx::createSphere(ballRadius, 32, 32);
+
+    // 3. Charger l'image de la balle
+    cv::Mat ballImg = cv::imread("../data/balle.png"); 
+    if (ballImg.empty()) std::cout << "ERREUR: Image balle introuvable !" << std::endl;
+    else cv::cvtColor(ballImg, ballImg, cv::COLOR_BGR2RGB); // BGR -> RGB
+    GLuint ballTextureID = glx::createTextureFromMat(ballImg);
+
+    // Matrice qui stocke la rotation accumulée
+    glm::mat4 ballRotationMatrix = glm::mat4(1.0f);
     double lastT = glfwGetTime();
-
     // === BOUCLE PRINCIPALE ===
     while (!glfwWindowShouldClose(window)) {
       if (!cap.read(frameBGR) || frameBGR.empty()) break;
@@ -201,9 +220,23 @@ int main(int argc, char** argv) {
       std::vector<cv::Point2f> imagePts;
       bool okDetect = detect::detectA4Corners(frameBGR, imagePts);
 
-      if (okDetect) {
-        cv::solvePnP(objectPts, imagePts, calib.cameraMatrix, calib.distCoeffs,
-                     rvec, tvec, !rvec.empty(), cv::SOLVEPNP_ITERATIVE);
+      if (!okDetect) {
+          // AFFICHER LE MESSAGE SI PAS DE DETECTION
+          std::string msg = "Pas de A4 detecte ! Placez la feuille...";
+          int baseline = 0;
+          cv::Size textSize = cv::getTextSize(msg, cv::FONT_HERSHEY_SIMPLEX, 1.0, 2, &baseline);
+          
+          // Centrer le texte
+          cv::Point textOrg((frameBGR.cols - textSize.width) / 2, (frameBGR.rows + textSize.height) / 2);
+          
+          // Fond noir semi-transparent pour lisibilité
+          cv::rectangle(frameBGR, textOrg + cv::Point(0, baseline), textOrg + cv::Point(textSize.width, -textSize.height), cv::Scalar(0,0,0), -1);
+          // Texte blanc
+          cv::putText(frameBGR, msg, textOrg, cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
+      } else {
+          // Si détecté, on calcule la pose
+          cv::solvePnP(objectPts, imagePts, calib.cameraMatrix, calib.distCoeffs,
+                      rvec, tvec, !rvec.empty(), cv::SOLVEPNP_ITERATIVE);
       }
       // =========================
       // PHYSIQUE BALLE
@@ -251,12 +284,23 @@ int main(int argc, char** argv) {
           float ax = glm::dot(gPlane, X);
           float ay = glm::dot(gPlane, Y);
 
-          float accel = 800.f;   // plus réaliste
-          float damping = 6.f;
+          float accel = 2000.f;   // plus réaliste
+          float damping = 1.f;
 
           ballVel += accel * glm::vec3(ax, ay, 0.f) * dt;
           ballVel *= 1.f / (1.f + damping * dt);
-          ballPos += ballVel * dt;
+          glm::vec3 deplacement = ballVel * dt;
+          ballPos += deplacement;
+          float dist = glm::length(deplacement);
+          
+          if (dist > 0.0001f) {
+              // Axe de rotation = Mouvement X Verticale
+              glm::vec3 axis = glm::cross(deplacement, glm::vec3(0,0,1));
+              axis = glm::normalize(axis);
+              float angle = dist / ballRadius; // Angle = dist / rayon
+              // On accumule la rotation
+              ballRotationMatrix = glm::rotate(glm::mat4(1.0f), angle, axis) * ballRotationMatrix;
+          }
 
           // Limites feuille A4
           float minX = -105.f + ballRadius;
@@ -329,32 +373,27 @@ int main(int argc, char** argv) {
       glUseProgram(lineProgram);
       glUniform2f(line_uViewport, (float)fbw, (float)fbh);
       glUniform1f(line_uThickness, THICKNESS_PX);
-      // =========================
-      // RENDU BALLE (croix)
-      // =========================
-      glUseProgram(lineProgram);
-      glUniform2f(line_uViewport, (float)fbw, (float)fbh);
-      glUniform1f(line_uThickness, THICKNESS_PX);
-
-      glm::mat4 M_ball = glm::translate(glm::mat4(1.f), ballPos);
+    // === BALLE ===      
+      glUseProgram(texObjProgram); // Utiliser le shader de texture
+      
+      // Matrice finale = Projection * Vue * Translation * Rotation
+      glm::mat4 M_ball = glm::translate(glm::mat4(1.f), ballPos) * ballRotationMatrix;
       glm::mat4 MVP_ball = P * V * M_ball;
-      glUniformMatrix4fv(line_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_ball));
+      
+      glUniformMatrix4fv(texObj_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_ball));
+      
+      // Activer la texture
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, ballTextureID);
+      glUniform1i(texObj_uTex, 0);
 
-      // jaune
-      glUniform3f(line_uColor, 1.f, 1.f, 0.f);
-
-      glBindVertexArray(ballAxes.x.vao);
-      glDrawArrays(GL_LINES, 0, ballAxes.x.count);
-
-      glBindVertexArray(ballAxes.y.vao);
-      glDrawArrays(GL_LINES, 0, ballAxes.y.count);
-
-      glBindVertexArray(ballAxes.z.vao);
-      glDrawArrays(GL_LINES, 0, ballAxes.z.count);
-
+      // Dessiner la sphère
+      glBindVertexArray(ballMesh.vao);
+      glDrawElements(GL_TRIANGLES, ballMesh.count, GL_UNSIGNED_INT, 0);
       glBindVertexArray(0);
       
       // === AXES ===
+      glUseProgram(lineProgram);
       glm::mat4 MVP_axes = P * V;
       glUniformMatrix4fv(line_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_axes));
 
@@ -394,3 +433,4 @@ int main(int argc, char** argv) {
     return -1;
   }
 }
+ 

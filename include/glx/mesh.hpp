@@ -33,5 +33,5 @@ Axes createAxes(float L);
 // Mur vertical entre (x1,y1) et (x2,y2) avec une certaine hauteur
 Mesh createWall(float x1, float y1, float x2, float y2, float height);
 Mesh createWalls(const std::vector<std::array<float,4>>& segments, float height);
-
+Mesh createSphere(float radius, int slices, int stacks);
 } // namespace glx

@@ -220,4 +220,62 @@ Mesh createWalls(const std::vector<std::array<float,4>>& segments,
     return m;
 }
 
+Mesh createSphere(float radius, int slices, int stacks) {
+    Mesh m;
+    std::vector<float> vertices;
+    std::vector<GLuint> indices;
+
+    for (int i = 0; i <= stacks; ++i) {
+        float V = i / (float)stacks;
+        float phi = V * 3.14159265f;
+
+        for (int j = 0; j <= slices; ++j) {
+            float U = j / (float)slices;
+            float theta = U * 3.14159265f * 2.0f;
+
+            // Position x,y,z
+            float x = cos(theta) * sin(phi);
+            float y = cos(phi);
+            float z = sin(theta) * sin(phi);
+
+            // On ajoute: Position (3 floats) + Texture UV (2 floats)
+            vertices.push_back(x * radius);
+            vertices.push_back(y * radius);
+            vertices.push_back(z * radius);
+            vertices.push_back(1.0f - U); // 1-U pour inverser texture
+            vertices.push_back(V);
+        }
+    }
+
+    // Indices (Triangles)
+    for (int i = 0; i < stacks; ++i) {
+        for (int j = 0; j < slices; ++j) {
+            int p1 = i * (slices + 1) + j;
+            int p2 = p1 + (slices + 1);
+            indices.push_back(p1); indices.push_back(p2); indices.push_back(p1 + 1);
+            indices.push_back(p1 + 1); indices.push_back(p2); indices.push_back(p2 + 1);
+        }
+    }
+
+    m.count = (GLsizei)indices.size();
+    glGenVertexArrays(1, &m.vao);
+    glGenBuffers(1, &m.vbo);
+    glGenBuffers(1, &m.ebo);
+
+    glBindVertexArray(m.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
+
+    // Attribut 0 : Position (3 floats)
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    // Attribut 1 : UV (2 floats) -> c'est ça qui manquait pour la texture !
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+
+    glBindVertexArray(0);
+    return m;
+}
 } // namespace glx
