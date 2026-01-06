@@ -68,6 +68,9 @@ GLuint createTextureFromMat(const cv::Mat& img) {
                img.cols, img.rows, 0,
                format, GL_UNSIGNED_BYTE, img.data);
 
+  // Génération mipmaps (pour texture haute qualité)
+  glGenerateMipmap(GL_TEXTURE_2D);
+  
   // Paramètres classiques de texture
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);

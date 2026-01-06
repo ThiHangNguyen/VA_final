@@ -1,4 +1,4 @@
-# Install script for directory: /home/hang_nguyen/Bureau/25_26/VA/AR 2025/AR2025
+# Install script for directory: /home/user/realité augmentée, virtuelle, mixte/VA_final
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -50,5 +50,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/hang_nguyen/Bureau/25_26/VA/AR 2025/AR2025/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/user/realité augmentée, virtuelle, mixte/VA_final/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

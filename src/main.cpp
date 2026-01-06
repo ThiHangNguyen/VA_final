@@ -220,6 +220,10 @@ int main(int argc, char** argv) {
       std::vector<cv::Point2f> imagePts;
       bool okDetect = detect::detectA4Corners(frameBGR, imagePts);
 
+        // --- GESTION AR / VR ---
+      bool isVR = false;          // Par défaut on est en AR
+      bool lastVPressed = false;  // Pour éviter que ça clignote si on reste appuyé
+
       if (!okDetect) {
           // AFFICHER LE MESSAGE SI PAS DE DETECTION
           std::string msg = "Pas de A4 detecte ! Placez la feuille...";
@@ -276,7 +280,6 @@ int main(int argc, char** argv) {
           // Gravité monde (choix arbitraire mais stable)
           // OpenCV : Y vers le bas
           glm::vec3 gCam(0.f, 1.f, 0.f);
-
           // Projection de la gravité sur le plan
           glm::vec3 gPlane = gCam - glm::dot(gCam, N) * N;
 
@@ -332,20 +335,43 @@ int main(int argc, char** argv) {
 
       // === RENDU OPENGL ===
       glfwPollEvents();
+
+      // --- Gestion Touche 'V' (Toggle AR/VR) ---
+      bool currentVPressed = (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS);
+      if (currentVPressed && !lastVPressed) {
+          isVR = !isVR; // On inverse le mode (AR -> VR ou VR -> AR)
+          std::cout << "Mode change: " << (isVR ? "VR" : "AR") << std::endl;
+      }
+      lastVPressed = currentVPressed;
+
       int fbw, fbh;
       glfwGetFramebufferSize(window, &fbw, &fbh);
       glViewport(0, 0, fbw, fbh);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-      // --- 1. Fond vidéo ---
-      glDisable(GL_DEPTH_TEST);
-      glUseProgram(bgProgram);
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, bgTex);
-      glUniform1i(bg_uTex, 0);
-      glBindVertexArray(bg.vao);
-      glDrawArrays(GL_TRIANGLES, 0, bg.count);
-      glBindVertexArray(0);
+      // --- 1. GESTION DU FOND (AR ou VR) ---
+      
+      if (!isVR) {
+          // === MODE AR : On dessine la webcam ===
+          glDisable(GL_DEPTH_TEST);
+          glUseProgram(bgProgram);
+          glActiveTexture(GL_TEXTURE0);
+          glBindTexture(GL_TEXTURE_2D, bgTex);
+          glUniform1i(bg_uTex, 0);
+          glBindVertexArray(bg.vao);
+          glDrawArrays(GL_TRIANGLES, 0, bg.count);
+          glBindVertexArray(0);
+          
+          // On nettoie le depth buffer pour dessiner la 3D par dessus
+          glClear(GL_DEPTH_BUFFER_BIT); 
+      } 
+      else {
+          // === MODE VR : Fond virtuel ===
+          // Pour l'instant un fond gris foncé "propre" (Critère Excellent: Skybox)
+          // On change la couleur de fond juste pour ce mode
+          glClearColor(0.2f, 0.2f, 0.2f, 1.0f); 
+          glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      }
 
       // --- 2. Cube et axes ---
       glEnable(GL_DEPTH_TEST);
@@ -433,4 +459,3 @@ int main(int argc, char** argv) {
     return -1;
   }
 }
- 

@@ -45,4 +45,10 @@ void main() {
 )";
 extern const char* const TEX_OBJ_VS;
 extern const char* const TEX_OBJ_FS;
+
+extern const char* const PHONG_VS;
+extern const char* const PHONG_FS;
+
+extern const char* const SHADOW_VS;
+extern const char* const SHADOW_FS;
 } // namespace glx

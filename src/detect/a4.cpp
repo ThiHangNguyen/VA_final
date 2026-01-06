@@ -77,11 +77,20 @@ bool detectA4Corners(const cv::Mat& frameBGR,
   const int rw = W/2, rh = H/2;                   // taille ROI = moitié image
   const int rx = (W-rw)/2, ry = (H-rh)/2;         // coin haut-gauche du ROI
   const cv::Rect roi(rx, ry, rw, rh);             // ROI centrale
-  const double meanROI = cv::mean(blurred(roi))[0];  // luminance moyenne centrale
-  const int offset = 15;                          // écart par rapport à la moyenne
-  const double T = std::clamp(meanROI - offset, 0.0, 255.0); // seuil dynamique
-  cv::threshold(blurred, thresh, T, 255, cv::THRESH_BINARY); // seuillage binaire
+  cv::Mat roiImg = blurred(roi);
+  cv::Mat tempThresh; // image temporaire pour Otsu dans la ROI
+  
+  // Cette fonction retourne le seuil calculé (ex: 145.0) sans modifier l'image entière
+  double calculatedT = cv::threshold(roiImg, tempThresh, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
 
+  // 3. Sécurité : Si le centre est trop noir (caméra cachée), on rejette
+  if (calculatedT < 30.0) return false;
+
+  // 4. On applique ce seuil calculé à TOUTE l'image
+  // Ici on utilise le seuil 'calculatedT' qu'on vient de trouver
+  cv::threshold(blurred, thresh, calculatedT, 255, cv::THRESH_BINARY);
+
+  
   // --- Étape 4 : détection de contours ---
   std::vector<std::vector<cv::Point>> contours;
   std::vector<cv::Vec4i> hier;

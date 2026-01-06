@@ -3,6 +3,8 @@ file(REMOVE_RECURSE
   "AR_A4_Video.pdb"
   "CMakeFiles/AR_A4_Video.dir/src/ar/calib.cpp.o"
   "CMakeFiles/AR_A4_Video.dir/src/ar/calib.cpp.o.d"
+  "CMakeFiles/AR_A4_Video.dir/src/ar/physics.cpp.o"
+  "CMakeFiles/AR_A4_Video.dir/src/ar/physics.cpp.o.d"
   "CMakeFiles/AR_A4_Video.dir/src/ar/pose.cpp.o"
   "CMakeFiles/AR_A4_Video.dir/src/ar/pose.cpp.o.d"
   "CMakeFiles/AR_A4_Video.dir/src/detect/a4.cpp.o"
