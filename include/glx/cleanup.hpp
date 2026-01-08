@@ -7,10 +7,10 @@
 namespace glx {
 
 // ====== Cleanup pour main_cube.cpp ======
+
 inline void cleanup(
     GLuint bgProgram,
     GLuint lineProgram,
-    GLuint solidProgram,
     GLuint bgTex,
     const glx::Mesh& bg,
     const glx::Mesh& walls,
@@ -20,7 +20,6 @@ inline void cleanup(
     // --- Shaders ---
     glDeleteProgram(bgProgram);
     glDeleteProgram(lineProgram);
-    glDeleteProgram(solidProgram);
 
     // --- Texture ---
     glDeleteTextures(1, &bgTex);
@@ -53,7 +52,8 @@ inline void cleanup(
     GLuint bgProgram,
     GLuint lineProgram,
     GLuint solidProgram,
-    GLuint ballProgram,
+    GLuint phongProgram,
+    GLuint shadowProgram,
     GLuint bgTex,
     GLuint ballTex,
     const glx::Mesh& bg,
@@ -66,7 +66,8 @@ inline void cleanup(
     glDeleteProgram(bgProgram);
     glDeleteProgram(lineProgram);
     glDeleteProgram(solidProgram);
-    glDeleteProgram(ballProgram);
+    glDeleteProgram(phongProgram);
+    glDeleteProgram(shadowProgram);
 
     // Textures
     glDeleteTextures(1, &bgTex);

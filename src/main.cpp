@@ -194,13 +194,21 @@ int main(int argc, char** argv) {
     glm::vec3 ballPos(0.f, 0.f, 8.f);   // Position initiale
     glm::vec3 ballVel(0.f);             // Vitesse
     float ballRadius = 8.f;             // Rayon
-    // 1. Charger le Shader de Texture
-    GLuint texObjVS = glx::compile(GL_VERTEX_SHADER, glx::TEX_OBJ_VS);
-    GLuint texObjFS = glx::compile(GL_FRAGMENT_SHADER, glx::TEX_OBJ_FS);
-    GLuint texObjProgram = glx::link({texObjVS, texObjFS});
-    GLint texObj_uMVP = glGetUniformLocation(texObjProgram, "uMVP");
-    GLint texObj_uTex = glGetUniformLocation(texObjProgram, "uTex");
+    // 1. Charger le Shader de Texture et les ombres
 
+    // Shader éclairage Phong (lumière + texture)
+    GLuint phongProgram = glx::link({glx::compile(GL_VERTEX_SHADER, glx::PHONG_VS), glx::compile(GL_FRAGMENT_SHADER, glx::PHONG_FS)});
+    GLint ph_uMVP = glGetUniformLocation(phongProgram, "uMVP");
+    GLint ph_uModel = glGetUniformLocation(phongProgram, "uModel");
+    GLint ph_uViewPos = glGetUniformLocation(phongProgram, "uViewPos");
+    GLint ph_uLightPos = glGetUniformLocation(phongProgram, "uLightPos");
+    GLint ph_uLightColor = glGetUniformLocation(phongProgram, "uLightColor");
+    GLint ph_uTex = glGetUniformLocation(phongProgram, "uTex");
+
+    // Shader ombres simples
+    GLuint shadowProgram = glx::link({glx::compile(GL_VERTEX_SHADER, glx::SHADOW_VS), glx::compile(GL_FRAGMENT_SHADER, glx::SHADOW_FS)});
+    GLint sh_uMVP = glGetUniformLocation(shadowProgram, "uMVP");
+    GLint sh_uColor = glGetUniformLocation(shadowProgram, "uColor");
     // 2. Créer la sphère
     glx::Mesh ballMesh = glx::createSphere(ballRadius, 32, 32);
 
@@ -210,9 +218,35 @@ int main(int argc, char** argv) {
     else cv::cvtColor(ballImg, ballImg, cv::COLOR_BGR2RGB); // BGR -> RGB
     GLuint ballTextureID = glx::createTextureFromMat(ballImg);
 
+    // --- 4. CHARGEMENT DES TEXTURES ADDITIONNELLES ---
+
+    // A. Sol VR (Pelouse)
+    cv::Mat grassImg = cv::imread("../data/pelouse.png");
+    if(grassImg.empty()) std::cerr << "ERREUR: Pelouse introuvable !" << std::endl;
+    else cv::cvtColor(grassImg, grassImg, cv::COLOR_BGR2RGB);
+    GLuint grassTexID = glx::createTextureFromMat(grassImg);
+
+    // B. Ciel VR (Skybox)
+    cv::Mat skyImg = cv::imread("../data/ciel.jpeg");
+    if(skyImg.empty()) std::cerr << "ERREUR: Ciel introuvable !" << std::endl;
+    else 
+    {
+      cv::cvtColor(skyImg, skyImg, cv::COLOR_BGR2RGB);
+      cv::flip(skyImg, skyImg, 0); 
+    }
+
+    GLuint skyTexID = glx::createTextureFromMat(skyImg);
+
+    // D. Mesh pour le sol en VR (Un simple rectangle)
+    glx::Mesh floorMesh = glx::createBackgroundQuad();
+    // =========================
+    
     // Matrice qui stocke la rotation accumulée
     glm::mat4 ballRotationMatrix = glm::mat4(1.0f);
     double lastT = glfwGetTime();
+    // Configuration Lumière (Soleil au milieu)
+    glm::vec3 lightPos(0.0f, 0.0f, 200.0f);
+
     // === BOUCLE PRINCIPALE ===
     while (!glfwWindowShouldClose(window)) {
       if (!cap.read(frameBGR) || frameBGR.empty()) break;
@@ -278,19 +312,25 @@ int main(int argc, char** argv) {
           N = glm::normalize(N);
 
           // Gravité monde (choix arbitraire mais stable)
-          // OpenCV : Y vers le bas
-          glm::vec3 gCam(0.f, 1.f, 0.f);
+          // OpenCV : Z vers le bas
+          glm::vec3 gCam(0.f, 0.f, 1.f);
           // Projection de la gravité sur le plan
           glm::vec3 gPlane = gCam - glm::dot(gCam, N) * N;
 
           // Accélération dans le plan (repère feuille)
           float ax = glm::dot(gPlane, X);
           float ay = glm::dot(gPlane, Y);
+          
+          // Zone morte pour éviter les micro-mouvements
+          if (std::abs(ax) < 0.1f) ax = 0.0f;
+          if (std::abs(ay) < 0.1f) ay = 0.0f;
 
-          float accel = 2000.f;   // plus réaliste
-          float damping = 1.f;
-
-          ballVel += accel * glm::vec3(ax, ay, 0.f) * dt;
+          float accel = 2000.f;  // Accélération plus forte pour compenser
+          float damping = 1.0f;  // Frottement fort
+          
+          ballVel.x += ax * accel * dt; // L'inclinaison Y contrôle la gauche/droite
+          ballVel.y += ay * accel * dt; // L'inclinaison X contrôle le haut/bas
+         
           ballVel *= 1.f / (1.f + damping * dt);
           glm::vec3 deplacement = ballVel * dt;
           ballPos += deplacement;
@@ -349,34 +389,62 @@ int main(int argc, char** argv) {
       glViewport(0, 0, fbw, fbh);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+      // --- Calcul des matrices ---
+      glm::mat4 P = ar::projectionFromCV(calib.cameraMatrix, (float)fbw, (float)fbh, 0.1f, 2000.0f);
+      glm::mat4 V = ar::viewFromRvecTvec(rvec, tvec);
+
+      // Position caméra (extraction de la 4ème colonne de la matrice inverse de vue)
+      glm::vec3 camPos = glm::vec3(glm::inverse(V)[3]);
+
       // --- 1. GESTION DU FOND (AR ou VR) ---
-      
+      glDisable(GL_DEPTH_TEST); // Le fond est derrière tout
+      glUseProgram(bgProgram);
+      glActiveTexture(GL_TEXTURE0);
+
       if (!isVR) {
           // === MODE AR : On dessine la webcam ===
-          glDisable(GL_DEPTH_TEST);
-          glUseProgram(bgProgram);
-          glActiveTexture(GL_TEXTURE0);
           glBindTexture(GL_TEXTURE_2D, bgTex);
-          glUniform1i(bg_uTex, 0);
-          glBindVertexArray(bg.vao);
-          glDrawArrays(GL_TRIANGLES, 0, bg.count);
-          glBindVertexArray(0);
-          
-          // On nettoie le depth buffer pour dessiner la 3D par dessus
-          glClear(GL_DEPTH_BUFFER_BIT); 
       } 
       else {
-          // === MODE VR : Fond virtuel ===
-          // Pour l'instant un fond gris foncé "propre" (Critère Excellent: Skybox)
-          // On change la couleur de fond juste pour ce mode
-          glClearColor(0.2f, 0.2f, 0.2f, 1.0f); 
-          glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+          // === MODE VR : On dessine le CIEL ===
+          // (On affiche la texture Skybox)
+          glBindTexture(GL_TEXTURE_2D, skyTexID); 
+      }
+
+      glUniform1i(bg_uTex, 0);
+      glBindVertexArray(bg.vao);
+      glDrawArrays(GL_TRIANGLES, 0, bg.count);
+      glBindVertexArray(0);
+      
+      // On nettoie le depth buffer pour dessiner la 3D par dessus le fond
+      glClear(GL_DEPTH_BUFFER_BIT); 
+      glEnable(GL_DEPTH_TEST);
+      
+      // ==========================================
+      // B. SOL PELOUSE (Uniquement en VR)
+      // ==========================================
+      if (isVR) {
+          glUseProgram(phongProgram);
+          // La feuille fait 210x297. Le quad fait 2x2.
+          glm::mat4 M_floor = glm::scale(glm::mat4(1.0f), glm::vec3(105.f, 148.5f, 1.f));
+          
+          glUniformMatrix4fv(ph_uMVP, 1, GL_FALSE, glm::value_ptr(P * V * M_floor));
+          glUniformMatrix4fv(ph_uModel, 1, GL_FALSE, glm::value_ptr(M_floor));
+          glUniform3fv(ph_uViewPos, 1, glm::value_ptr(camPos));
+          glUniform3fv(ph_uLightPos, 1, glm::value_ptr(lightPos));
+          glUniform3fv(ph_uLightColor, 1, glm::value_ptr(glm::vec3(1.0f)));
+
+          glActiveTexture(GL_TEXTURE0);
+          glBindTexture(GL_TEXTURE_2D, grassTexID); // pelouse 
+          glUniform1i(ph_uTex, 0);
+          
+
+          glBindVertexArray(floorMesh.vao);
+          glDrawArrays(GL_TRIANGLES, 0, floorMesh.count);
       }
 
       // --- 2. Cube et axes ---
       glEnable(GL_DEPTH_TEST);
-      glm::mat4 P = ar::projectionFromCV(calib.cameraMatrix, (float)fbw, (float)fbh, 0.1f, 2000.0f);
-      glm::mat4 V = ar::viewFromRvecTvec(rvec, tvec);
       glm::mat4 M_axes = glm::mat4(1.0f);
       glm::mat4 M_cube = glm::translate(glm::mat4(1.0f), glm::vec3(0.f, 0.f, 30.f));
 
@@ -384,45 +452,73 @@ int main(int argc, char** argv) {
       glUniform2f(line_uViewport, (float)fbw, (float)fbh);
       glUniform1f(line_uThickness, THICKNESS_PX);
 
-      // === MURS ===
-      glUseProgram(solidProgram);
+      // === MURS (Couleur Unie 3D) ===
+      glUseProgram(solidProgram); // On repasse au shader de couleur simple
 
-      glm::mat4 MVP_walls = P * V;
+      glm::mat4 M_walls = glm::mat4(1.0f);
+      glm::mat4 MVP_walls = P * V * M_walls; // On calcule la matrice totale
+
+      // 1. Envoyer la matrice de position
       glUniformMatrix4fv(solid_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_walls));
-      glUniform3f(solid_uColor, 0.2f, 1.0f, 1.0f);
 
+      // 2. Envoyer la couleur (Ici un Marron type "brique")
+      // Tu peux changer les chiffres (Red, Green, Blue) entre 0.0 et 1.0
+      glUniform3f(solid_uColor, 0.6f, 0.3f, 0.2f); 
+
+      // 3. Dessiner
       glBindVertexArray(wallsMesh.vao);
       glDrawElements(GL_TRIANGLES, wallsMesh.count, GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
+      // === BALLE ===      
+      // ==========================================
+      // 1. OMBRE (Shadow) - Projection sur le sol
+      // ==========================================
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glUseProgram(shadowProgram);
 
-      
-      glUseProgram(lineProgram);
-      glUniform2f(line_uViewport, (float)fbw, (float)fbh);
-      glUniform1f(line_uThickness, THICKNESS_PX);
-    // === BALLE ===      
-      glUseProgram(texObjProgram); // Utiliser le shader de texture
-      
-      // Matrice finale = Projection * Vue * Translation * Rotation
-      glm::mat4 M_ball = glm::translate(glm::mat4(1.f), ballPos) * ballRotationMatrix;
-      glm::mat4 MVP_ball = P * V * M_ball;
-      
-      glUniformMatrix4fv(texObj_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_ball));
-      
-      // Activer la texture
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, ballTextureID);
-      glUniform1i(texObj_uTex, 0);
+      // Matrice de projection sur le sol (Z=0) selon la lumière (Directionnelle)
+      glm::mat4 shadowProj(1.0f);
+      shadowProj[2][0] = -lightPos.x / lightPos.z;
+      shadowProj[2][1] = -lightPos.y / lightPos.z;
+      shadowProj[2][2] = 0.0f;
 
-      // Dessiner la sphère
+      glm::mat4 M_ball_world = glm::translate(glm::mat4(1.0f), ballPos) * ballRotationMatrix;
+      
+      glm::mat4 M_shadow = glm::translate(glm::mat4(1.0f), glm::vec3(0,0,0.1f)) * shadowProj * M_ball_world;
+
+      glUniformMatrix4fv(sh_uMVP, 1, GL_FALSE, glm::value_ptr(P * V * M_shadow));
+      glUniform4f(sh_uColor, 0.1f, 0.1f, 0.1f, 0.5f); // Noir transparent
+      
       glBindVertexArray(ballMesh.vao);
       glDrawElements(GL_TRIANGLES, ballMesh.count, GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
+      glDisable(GL_BLEND);
+
+      // ==========================================
+      // 2. BALLE (Phong) - Eclairage Réaliste
+      // ==========================================
+      glUseProgram(phongProgram); 
+      glm::mat4 M_ball = glm::translate(glm::mat4(1.f), ballPos) * ballRotationMatrix;
       
+      glUniformMatrix4fv(ph_uMVP, 1, GL_FALSE, glm::value_ptr(P * V * M_ball));
+      glUniformMatrix4fv(ph_uModel, 1, GL_FALSE, glm::value_ptr(M_ball));
+      
+      // Lumière et Caméra
+      glUniform3fv(ph_uViewPos, 1, glm::value_ptr(camPos));
+      glUniform3fv(ph_uLightPos, 1, glm::value_ptr(lightPos));
+      glUniform3fv(ph_uLightColor, 1, glm::value_ptr(glm::vec3(1.0f))); // Lumière blanche
+
+      // Texture
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, ballTextureID);
+      glUniform1i(ph_uTex, 0);
+
+      glBindVertexArray(ballMesh.vao);
+      glDrawElements(GL_TRIANGLES, ballMesh.count, GL_UNSIGNED_INT, 0);
       // === AXES ===
       glUseProgram(lineProgram);
       glm::mat4 MVP_axes = P * V;
       glUniformMatrix4fv(line_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_axes));
-
+ 
       // Axe X — rouge
       glUniform3f(line_uColor, 1.f, 0.f, 0.f);
       glBindVertexArray(axes.x.vao);
@@ -450,10 +546,15 @@ int main(int argc, char** argv) {
       glfwSwapBuffers(window);
     }
 
-    // --- Nettoyage OpenGL ---
-    glx::cleanup(bgProgram, lineProgram, solidProgram, bgTex, bg, wallsMesh, axes, window);
-    return 0;
+    // --- Nettoyage des ressources ---
+    glDeleteTextures(1, &grassTexID);
+    glDeleteTextures(1, &skyTexID);
+    glDeleteVertexArrays(1, &floorMesh.vao); glDeleteBuffers(1, &floorMesh.vbo);
 
+    // --- Nettoyage OpenGL ---
+    glx::cleanup(bgProgram, lineProgram, solidProgram, phongProgram, shadowProgram, bgTex, ballTextureID, bg, wallsMesh, ballMesh, axes, window);
+    return 0;
+    
   } catch (const std::exception& e) {
     std::cerr << "Fatal: " << e.what() << std::endl;
     return -1;
