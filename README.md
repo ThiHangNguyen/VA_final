@@ -96,6 +96,8 @@ Lancer par défaut :
 
     ./build/AR_A4_Video
 
+lancer avec la caméra du téléphone, exemple 
+    ./AR_A4_Video --phone http://147.94.216.154:4747/video
 
 Auteur :
 --------

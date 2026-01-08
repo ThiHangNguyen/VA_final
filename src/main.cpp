@@ -17,6 +17,9 @@
 #include <iostream>
 #include <stdexcept>
 #include <vector>
+// =============================
+// LEVEL DESIGN
+// =============================
 
 
 
@@ -36,7 +39,17 @@ int main(int argc, char** argv) {
         if (arg1 == "--webcam") {
             useWebcam = true;
             calibPath = "../data/camera_webcam.yaml";
-        } else if (arg1 == "--video") {
+        } 
+        else if (arg1 == "--phone") {
+          if (argc < 3) {
+              std::cerr << "Usage: ./AR_A4_Video --phone <url_flux>\n";
+              return -1;
+          }
+          useWebcam = false;                 // c’est un flux
+          calibPath = "../data/camera.yaml"; // tu peux garder même calib au début
+          cap.open(argv[2]);                // <<< ICI LE SWITCH
+        }
+        else if (arg1 == "--video") {
             if (argc < 4) {
                 std::cerr << "Usage: ./AR_A4_Video --video <video_path> <calibration_path>\n";
                 return -1;
@@ -82,7 +95,20 @@ int main(int argc, char** argv) {
                   << (int)cap.get(cv::CAP_PROP_FRAME_WIDTH) << "x"
                   << (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ "
                   << (int)cap.get(cv::CAP_PROP_FPS) << " FPS\n";
-    } else {
+    }
+    else if (argc > 1 && std::string(argv[1]) == "--phone") {
+
+        std::string phoneURL = argv[2];
+
+        if (!cap.open(phoneURL)) {
+            std::cerr << "Erreur : flux téléphone non accessible => "
+                      << phoneURL << "\n";
+            return -1;
+        }
+        std::cout << "[INFO] Camera PHONE via reseau => "
+                  << phoneURL << "\n";
+    }
+    else {
         if (!cap.open(videoPath)) {
             std::cerr << "Erreur : impossible d’ouvrir la vidéo : " << videoPath << "\n";
             return -1;
@@ -140,22 +166,10 @@ int main(int argc, char** argv) {
     glx::Axes axes = glx::createAxes(210.0f);
     // petite croix pour représenter la balle
     glx::Axes ballAxes = glx::createAxes(10.f);
-
-    // === murs sur les bords A4 ===
-    std::vector<std::array<float,4>> wallSegments = {
-        // bas
-        {-105.f, -148.5f, +105.f, -148.5f},
-        // droite
-        {+105.f, -148.5f, +105.f, +148.5f},
-        // haut
-        {+105.f, +148.5f, -105.f, +148.5f},
-        // gauche
-        {-105.f, +148.5f, -105.f, -148.5f}
-    };
-
+    
     // hauteur du mur = 40 mm par exemple
     float WALL_HEIGHT = 40.f;
-
+    auto wallSegments = glx::makeLevel1();
     // création d’un seul mesh contenant tous les murs
     glx::Mesh wallsMesh = glx::createWalls(wallSegments, WALL_HEIGHT);
 
@@ -220,6 +234,10 @@ int main(int argc, char** argv) {
       std::vector<cv::Point2f> imagePts;
       bool okDetect = detect::detectA4Corners(frameBGR, imagePts);
 
+        // --- GESTION AR / VR ---
+      bool isVR = false;          // Par défaut on est en AR
+      bool lastVPressed = false;  // Pour éviter que ça clignote si on reste appuyé
+
       if (!okDetect) {
           // AFFICHER LE MESSAGE SI PAS DE DETECTION
           std::string msg = "Pas de A4 detecte ! Placez la feuille...";
@@ -233,6 +251,7 @@ int main(int argc, char** argv) {
           cv::rectangle(frameBGR, textOrg + cv::Point(0, baseline), textOrg + cv::Point(textSize.width, -textSize.height), cv::Scalar(0,0,0), -1);
           // Texte blanc
           cv::putText(frameBGR, msg, textOrg, cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
+
       } else {
           // Si détecté, on calcule la pose
           cv::solvePnP(objectPts, imagePts, calib.cameraMatrix, calib.distCoeffs,
@@ -251,41 +270,50 @@ int main(int argc, char** argv) {
           cv::Mat Rcv;
           cv::Rodrigues(rvec, Rcv);
 
-          // Axes feuille (repère caméra)
-          glm::vec3 X(
-              Rcv.at<double>(0,0),
-              Rcv.at<double>(1,0),
-              Rcv.at<double>(2,0)
-          );
-          glm::vec3 Y(
-              Rcv.at<double>(0,1),
-              Rcv.at<double>(1,1),
-              Rcv.at<double>(2,1)
-          );
+          // 1️⃣ normale du plan (OK)
           glm::vec3 N(
               Rcv.at<double>(0,2),
               Rcv.at<double>(1,2),
               Rcv.at<double>(2,2)
           );
-
-          // Normalisation OBLIGATOIRE
-          X = glm::normalize(X);
-          Y = glm::normalize(Y);
           N = glm::normalize(N);
+
+          // 2️⃣ Axe X dans le plan (choix stable)
+          glm::vec3 worldUp(0.f, 0.f, -1.f);
+          glm::vec3 X = glm::normalize(glm::cross(worldUp, N));
+
+          // Sécurité si caméra quasi verticale
+          if (glm::length(X) < 1e-4f) {
+              X = glm::normalize(glm::cross(glm::vec3(0.f,1.f,0.f), N));
+          }
+
+          // 3️⃣ Axe Y réel du plan
+          glm::vec3 Y = -glm::normalize(glm::cross(N, X));
+
+          std::cout << "[DEBUG AXES PLAN] X axis = "
+                    << X.x << "," << X.y << "," << X.z << std::endl;
+
+          std::cout << "[DEBUG AXES PLAN] Y axis = "
+                    << Y.x << "," << Y.y << std::endl;
+
+          std::cout << "[DEBUG AXES PLAN] normal = "
+                    << N.x << "," << N.y << std::endl;
 
           // Gravité monde (choix arbitraire mais stable)
           // OpenCV : Y vers le bas
-          glm::vec3 gCam(0.f, 1.f, 0.f);
-
+          glm::vec3 gCam(1.f, -1.f, 0.f);
           // Projection de la gravité sur le plan
           glm::vec3 gPlane = gCam - glm::dot(gCam, N) * N;
+          float gLen = glm::length(gPlane);
+          if (gLen > 1e-4f)
+              gPlane /= gLen;
 
           // Accélération dans le plan (repère feuille)
           float ax = glm::dot(gPlane, X);
           float ay = glm::dot(gPlane, Y);
 
-          float accel = 2000.f;   // plus réaliste
-          float damping = 1.f;
+          float accel = 800.f;   // plus réaliste
+          float damping = 3.f;
 
           ballVel += accel * glm::vec3(ax, ay, 0.f) * dt;
           ballVel *= 1.f / (1.f + damping * dt);
@@ -302,19 +330,22 @@ int main(int argc, char** argv) {
               ballRotationMatrix = glm::rotate(glm::mat4(1.0f), angle, axis) * ballRotationMatrix;
           }
 
-          // Limites feuille A4
-          float minX = -105.f + ballRadius;
-          float maxX =  105.f - ballRadius;
-          float minY = -148.5f + ballRadius;
-          float maxY =  148.5f - ballRadius;
+          ballPos += deplacement;
 
-          // Collisions
-          if (ballPos.x < minX) { ballPos.x = minX; ballVel.x *= -0.5f; }
-          if (ballPos.x > maxX) { ballPos.x = maxX; ballVel.x *= -0.5f; }
-          if (ballPos.y < minY) { ballPos.y = minY; ballVel.y *= -0.5f; }
-          if (ballPos.y > maxY) { ballPos.y = maxY; ballVel.y *= -0.5f; }
+          // collisions murs (externes + internes)
+          for (const auto& s : wallSegments)
+          {
+              ar::resolveWallCollision(
+                  ballPos,
+                  ballVel,
+                  ballRadius,
+                  s[0], s[1],
+                  s[2], s[3]
+              );
+          }
 
           ballPos.z = ballRadius;
+
       }
 
       // Conversion + flip (OpenGL en bas à gauche)
@@ -332,20 +363,43 @@ int main(int argc, char** argv) {
 
       // === RENDU OPENGL ===
       glfwPollEvents();
+
+      // --- Gestion Touche 'V' (Toggle AR/VR) ---
+      bool currentVPressed = (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS);
+      if (currentVPressed && !lastVPressed) {
+          isVR = !isVR; // On inverse le mode (AR -> VR ou VR -> AR)
+          std::cout << "Mode change: " << (isVR ? "VR" : "AR") << std::endl;
+      }
+      lastVPressed = currentVPressed;
+
       int fbw, fbh;
       glfwGetFramebufferSize(window, &fbw, &fbh);
       glViewport(0, 0, fbw, fbh);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-      // --- 1. Fond vidéo ---
-      glDisable(GL_DEPTH_TEST);
-      glUseProgram(bgProgram);
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, bgTex);
-      glUniform1i(bg_uTex, 0);
-      glBindVertexArray(bg.vao);
-      glDrawArrays(GL_TRIANGLES, 0, bg.count);
-      glBindVertexArray(0);
+      // --- 1. GESTION DU FOND (AR ou VR) ---
+      
+      if (!isVR) {
+          // === MODE AR : On dessine la webcam ===
+          glDisable(GL_DEPTH_TEST);
+          glUseProgram(bgProgram);
+          glActiveTexture(GL_TEXTURE0);
+          glBindTexture(GL_TEXTURE_2D, bgTex);
+          glUniform1i(bg_uTex, 0);
+          glBindVertexArray(bg.vao);
+          glDrawArrays(GL_TRIANGLES, 0, bg.count);
+          glBindVertexArray(0);
+          
+          // On nettoie le depth buffer pour dessiner la 3D par dessus
+          glClear(GL_DEPTH_BUFFER_BIT); 
+      } 
+      else {
+          // === MODE VR : Fond virtuel ===
+          // Pour l'instant un fond gris foncé "propre" (Critère Excellent: Skybox)
+          // On change la couleur de fond juste pour ce mode
+          glClearColor(0.2f, 0.2f, 0.2f, 1.0f); 
+          glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      }
 
       // --- 2. Cube et axes ---
       glEnable(GL_DEPTH_TEST);
@@ -363,7 +417,7 @@ int main(int argc, char** argv) {
 
       glm::mat4 MVP_walls = P * V;
       glUniformMatrix4fv(solid_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_walls));
-      glUniform3f(solid_uColor, 0.2f, 1.0f, 1.0f);
+      glUniform3f(solid_uColor, 0.55f, 0.36f, 0.18f);
 
       glBindVertexArray(wallsMesh.vao);
       glDrawElements(GL_TRIANGLES, wallsMesh.count, GL_UNSIGNED_INT, 0);
@@ -376,16 +430,20 @@ int main(int argc, char** argv) {
     // === BALLE ===      
       glUseProgram(texObjProgram); // Utiliser le shader de texture
       
-      // Matrice finale = Projection * Vue * Translation * Rotation
-      glm::mat4 M_ball = glm::translate(glm::mat4(1.f), ballPos) * ballRotationMatrix;
+      // Matrice modèle de la balle = translation dans le plan + rotation accumulée
+      glm::mat4 M_ball = glm::translate(glm::mat4(1.0f), ballPos) * ballRotationMatrix;
+
+      // MVP complet
       glm::mat4 MVP_ball = P * V * M_ball;
-      
+
+      // Envoi au shader
       glUniformMatrix4fv(texObj_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_ball));
-      
-      // Activer la texture
+
+      // Activer texture
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, ballTextureID);
       glUniform1i(texObj_uTex, 0);
+
 
       // Dessiner la sphère
       glBindVertexArray(ballMesh.vao);
@@ -433,4 +491,3 @@ int main(int argc, char** argv) {
     return -1;
   }
 }
- 

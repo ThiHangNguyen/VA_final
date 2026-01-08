@@ -169,4 +169,95 @@ uniform sampler2D uTex;
 void main() {
     FragColor = texture(uTex, vUV);
 })";
+
+// ==========================================
+// SHADER PHONG (Ambient + Diffuse + Specular)
+// ==========================================
+const char* const PHONG_VS = R"(#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec2 aUV;
+layout (location = 2) in vec3 aNormal;
+
+uniform mat4 uMVP;
+uniform mat4 uModel;
+uniform mat4 uView; // Necessaire pour la speculaire (position camera)
+
+out vec3 vFragPos;
+out vec3 vNormal;
+out vec2 vUV;
+
+void main() {
+    // Position dans le monde pour l'eclairage
+    vFragPos = vec3(uModel * vec4(aPos, 1.0));
+    
+    // Normale transformee (inverse transpose pour gerer le scale)
+    vNormal = mat3(transpose(inverse(uModel))) * aNormal;
+    
+    vUV = aUV;
+    gl_Position = uMVP * vec4(aPos, 1.0);
+}
+)";
+
+const char* const PHONG_FS = R"(#version 330 core
+in vec3 vFragPos;
+in vec3 vNormal;
+in vec2 vUV;
+
+out vec4 FragColor;
+
+uniform sampler2D uTex;
+uniform vec3 uLightPos;
+uniform vec3 uViewPos;
+uniform vec3 uLightColor;
+
+void main() {
+    // Config materiau
+    float ambientStrength = 0.3;
+    float specularStrength = 0.8;
+    float shininess = 32.0;
+
+    // 1. Ambiant
+    vec3 ambient = ambientStrength * uLightColor;
+
+    // 2. Diffus
+    vec3 norm = normalize(vNormal);
+    vec3 lightDir = normalize(uLightPos - vFragPos);
+    float diff = max(dot(norm, lightDir), 0.0);
+    vec3 diffuse = diff * uLightColor;
+
+    // 3. Speculaire (Blinn-Phong)
+    vec3 viewDir = normalize(uViewPos - vFragPos);
+    vec3 halfwayDir = normalize(lightDir + viewDir);
+    float spec = pow(max(dot(norm, halfwayDir), 0.0), shininess);
+    vec3 specular = specularStrength * spec * uLightColor;
+
+    // Couleur finale = Lumiere * Texture
+    vec4 texColor = texture(uTex, vUV);
+    vec3 result = (ambient + diffuse + specular) * texColor.rgb;
+    
+    FragColor = vec4(result, texColor.a);
+}
+)";
+
+// ==========================================
+// SHADER OMBRE (Couleur unie + Transparence)
+// ==========================================
+const char* const SHADOW_VS = R"(#version 330 core
+layout (location = 0) in vec3 aPos;
+uniform mat4 uMVP;
+
+void main() {
+    gl_Position = uMVP * vec4(aPos, 1.0);
+}
+)";
+
+const char* const SHADOW_FS = R"(#version 330 core
+out vec4 FragColor;
+uniform vec4 uColor; // vec4 pour gerer l'alpha
+
+void main() {
+    FragColor = uColor;
+}
+)";
+
 } // namespace glx

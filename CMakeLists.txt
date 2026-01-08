@@ -28,6 +28,7 @@ add_executable(AR_A4_Video
 
   src/ar/calib.cpp
   src/ar/pose.cpp
+  src/ar/physics.cpp
   src/detect/a4.cpp
   src/glx/mesh.cpp
   src/glx/shaders.cpp

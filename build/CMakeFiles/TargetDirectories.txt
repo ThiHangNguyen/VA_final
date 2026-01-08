@@ -1,3 +1,0 @@
-/home/hang_nguyen/Bureau/25_26/VA/AR 2025/AR2025/build/CMakeFiles/AR_A4_Video.dir
-/home/hang_nguyen/Bureau/25_26/VA/AR 2025/AR2025/build/CMakeFiles/edit_cache.dir
-/home/hang_nguyen/Bureau/25_26/VA/AR 2025/AR2025/build/CMakeFiles/rebuild_cache.dir

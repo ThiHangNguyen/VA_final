@@ -220,6 +220,7 @@ Mesh createWalls(const std::vector<std::array<float,4>>& segments,
     return m;
 }
 
+
 Mesh createSphere(float radius, int slices, int stacks) {
     Mesh m;
     std::vector<float> vertices;
@@ -278,4 +279,46 @@ Mesh createSphere(float radius, int slices, int stacks) {
     glBindVertexArray(0);
     return m;
 }
+
+std::vector<std::array<float,4>> makeLevel1()
+{
+    return {
+        // =========================
+        // CONTOUR A4
+        // =========================
+
+        // bas (SORTIE en bas-droite → ouverture entre -20 et +20)
+        /*{-105, -148.5, -20,  -148.5},
+        { 20,  -148.5, 105,  -148.5},*/
+        {-105.f, -148.5f, 105.f, -148.5f},
+        // haut (fermé)
+        {105.f, 148.5f, -105.f, 148.5f},
+        // gauche
+        {-105.f, 148.5f, -105.f, -148.5f},
+
+        // droite
+        {105.f, -148.5f, 105.f, 148.5f},
+
+        // =========================
+        // MURS INTERNES – LABYRINTHE
+        // =========================
+
+        // Mur principal horizontal (bloque accès direct)
+        {-80,  -90,   80,  -90},
+
+        // Chemin BAS (plus court, technique)
+        {-80,  -30,  -20,  -30},
+        {-20,  -30,  -20,   20},
+        {-20,   20,   60,   20},
+
+        // Chemin HAUT (plus long, plus safe)
+        {-60,   40,   60,   40},
+        { 60,   40,   60,  -10},
+
+        // Mur de séparation centrale (force le choix)
+        { 10,  -90,   10,   40}
+    };
+}
+
+
 } // namespace glx
