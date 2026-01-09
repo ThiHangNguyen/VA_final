@@ -247,16 +247,17 @@ int main(int argc, char** argv) {
     // Configuration Lumière (Soleil au milieu)
     glm::vec3 lightPos(0.0f, 0.0f, 200.0f);
 
+
+      // --- GESTION AR / VR ---
+      bool isVR = false;          // Par défaut on est en AR
+      bool lastVPressed = false;  // Pour éviter que ça clignote si on reste appuyé
+
     // === BOUCLE PRINCIPALE ===
     while (!glfwWindowShouldClose(window)) {
       if (!cap.read(frameBGR) || frameBGR.empty()) break;
 
       std::vector<cv::Point2f> imagePts;
       bool okDetect = detect::detectA4Corners(frameBGR, imagePts);
-
-        // --- GESTION AR / VR ---
-      bool isVR = false;          // Par défaut on est en AR
-      bool lastVPressed = false;  // Pour éviter que ça clignote si on reste appuyé
 
       if (!okDetect) {
           // AFFICHER LE MESSAGE SI PAS DE DETECTION
@@ -272,7 +273,8 @@ int main(int argc, char** argv) {
           // Texte blanc
           cv::putText(frameBGR, msg, textOrg, cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
       } else {
-          // Si détecté, on calcule la pose
+          
+          // On utilise les points potentiellement tournés pour que le tracking reste stable
           cv::solvePnP(objectPts, imagePts, calib.cameraMatrix, calib.distCoeffs,
                       rvec, tvec, !rvec.empty(), cv::SOLVEPNP_ITERATIVE);
       }
