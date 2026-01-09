@@ -28,7 +28,8 @@ void resolveWallCollision(glm::vec3& pos, glm::vec3& vel, float radius,
     float dist = glm::length(distVec);
     
     // Si on touche (distance < rayon)
-    if (dist < radius && dist > 0.0001f) {
+    float wallThickness = 2.0f;
+    if (dist < radius + wallThickness){
         // Normale de collision
         glm::vec2 n = glm::normalize(distVec);
         

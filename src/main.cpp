@@ -239,6 +239,7 @@ int main(int argc, char** argv) {
       bool lastVPressed = false;  // Pour éviter que ça clignote si on reste appuyé
 
       if (!okDetect) {
+          ballVel *= 0.0f;
           // AFFICHER LE MESSAGE SI PAS DE DETECTION
           std::string msg = "Pas de A4 detecte ! Placez la feuille...";
           int baseline = 0;
@@ -251,7 +252,7 @@ int main(int argc, char** argv) {
           cv::rectangle(frameBGR, textOrg + cv::Point(0, baseline), textOrg + cv::Point(textSize.width, -textSize.height), cv::Scalar(0,0,0), -1);
           // Texte blanc
           cv::putText(frameBGR, msg, textOrg, cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
-
+          continue; 
       } else {
           // Si détecté, on calcule la pose
           cv::solvePnP(objectPts, imagePts, calib.cameraMatrix, calib.distCoeffs,
@@ -318,31 +319,26 @@ int main(int argc, char** argv) {
           ballVel += accel * glm::vec3(ax, ay, 0.f) * dt;
           ballVel *= 1.f / (1.f + damping * dt);
           glm::vec3 deplacement = ballVel * dt;
-          ballPos += deplacement;
-          float dist = glm::length(deplacement);
-          
-          if (dist > 0.0001f) {
-              // Axe de rotation = Mouvement X Verticale
-              glm::vec3 axis = glm::cross(deplacement, glm::vec3(0,0,1));
-              axis = glm::normalize(axis);
-              float angle = dist / ballRadius; // Angle = dist / rayon
-              // On accumule la rotation
-              ballRotationMatrix = glm::rotate(glm::mat4(1.0f), angle, axis) * ballRotationMatrix;
+
+          // nombre de sous-steps selon la distance parcourue
+          float stepLen = ballRadius * 0.5f;               // pas plus grand que ~ rayon/2
+          int steps = (int)std::ceil(glm::length(deplacement) / stepLen);
+          steps = std::max(1, std::min(steps, 20));        // clamp pour pas exploser CPU
+
+          glm::vec3 step = deplacement / (float)steps;
+
+          for (int i = 0; i < steps; ++i) {
+              ballPos += step;
+
+              // collisions murs (externes + internes)
+              for (const auto& s : wallSegments) {
+                  ar::resolveWallCollision(
+                      ballPos, ballVel, ballRadius,
+                      s[0], s[1], s[2], s[3]
+                  );
+              }
           }
 
-          ballPos += deplacement;
-
-          // collisions murs (externes + internes)
-          for (const auto& s : wallSegments)
-          {
-              ar::resolveWallCollision(
-                  ballPos,
-                  ballVel,
-                  ballRadius,
-                  s[0], s[1],
-                  s[2], s[3]
-              );
-          }
 
           ballPos.z = ballRadius;
 
