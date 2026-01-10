@@ -23,31 +23,42 @@
 int main(int argc, char** argv) {
   try {
     // --- Lecture des arguments : choix entre webcam ou vidéo ---
-    std::string calibPath;
+    std::string calibPath = "../data/camera.yaml";   
+    std::string videoPath = "../data/Video_AR_1.mp4";       // Par défaut : chemin de la vidéo  
+    std::string phoneUrl  = "";                         // URL pour DroidCam
     cv::VideoCapture cap;
-    bool useWebcam = (argc > 1 && std::string(argv[1]) == "--webcam");
-
-    std::string videoPath = "../data/Video_AR_1.mp4";       // Par défaut : chemin de la vidéo
-    calibPath = "../data/camera.yaml";                      // Par défaut : calibration
-
+    bool useWebcam = false;
+    bool usePhone  = false;
     // --- Interprétation des arguments ---
     if (argc > 1) {
         std::string arg1 = argv[1];
+
         if (arg1 == "--webcam") {
             useWebcam = true;
             calibPath = "../data/camera_webcam.yaml";
-        } else if (arg1 == "--video") {
+        } 
+        else if (arg1 == "--phone") {
+            // Usage: ./AR_A4_Video --phone http://192.168.1.47:4747/video
+            if (argc < 3) {
+                std::cerr << "Usage: ./AR_A4_Video --phone <url_droidcam>\n"
+                          << "Exemple: http://192.168.1.15:4747/video\n";
+                return -1;
+            }
+            usePhone = true;
+            phoneUrl = argv[2];
+            // On garde camera.yaml ou on en crée un camera_phone.yaml si besoin
+            calibPath = "../data/camera.yaml"; 
+        }
+        else if (arg1 == "--video") {
             if (argc < 4) {
                 std::cerr << "Usage: ./AR_A4_Video --video <video_path> <calibration_path>\n";
                 return -1;
             }
             videoPath = argv[2];
             calibPath = argv[3];
-        } else {
+        } 
+        else {
             std::cerr << "Argument inconnu : " << arg1 << "\n";
-            std::cerr << "Utilisation :\n";
-            std::cerr << "  ./AR_A4_Video --webcam\n";
-            std::cerr << "  ./AR_A4_Video --video <video_path> <calibration_path>\n";
             return -1;
         }
     }
@@ -82,7 +93,23 @@ int main(int argc, char** argv) {
                   << (int)cap.get(cv::CAP_PROP_FRAME_WIDTH) << "x"
                   << (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ "
                   << (int)cap.get(cv::CAP_PROP_FPS) << " FPS\n";
-    } else {
+
+    } else if (usePhone) {
+        std::cout << "[INFO] Tentative de connexion a DroidCam: " << phoneUrl << std::endl;
+        
+        // OpenCV ouvre l'URL comme un fichier vidéo
+        if (!cap.open(phoneUrl)) {
+            std::cerr << "Erreur : Impossible de se connecter au flux téléphone !\n"
+                      << "Vérifiez que DroidCam est lancé et que l'IP est correcte.\n";
+            return -1;
+        }
+        
+        // Parfois DroidCam démarre lentement, on peut attendre un peu ou vérifier
+        std::cout << "[INFO] Flux téléphone ouvert avec succès.\n";
+    }
+    else {
+        // [VIDEO CLASSIQUE]
+        std::cout << "[INFO] Lecture fichier video: " << videoPath << std::endl;
         if (!cap.open(videoPath)) {
             std::cerr << "Erreur : impossible d’ouvrir la vidéo : " << videoPath << "\n";
             return -1;
@@ -142,23 +169,42 @@ int main(int argc, char** argv) {
     glx::Axes ballAxes = glx::createAxes(10.f);
 
     // === murs sur les bords A4 ===
+   // On élargit un peu le cadre pour que les coins se croisent
+    // Au lieu de 105 et 148.5, on pousse un peu plus loin
+    float extX = 105.0f + 6.0f;  // + demi-épaisseur
+    float extY = 148.5f + 6.0f; 
+
+    // === MURS CADRE A4 (Assemblage "Menuisier") ===
+    
+    // 1. D'ABORD, on calcule les dimensions
+    // Les murs Verticaux sont "LONGS" : ils vont jusqu'à 148.5 + 5mm = 153.5
+    float longY = 148.5f + 5.0f; 
+
+    // Les murs Horizontaux sont "COURTS" : ils s'arrêtent à 105 - 5mm = 100
+    float shortX = 105.0f - 5.0f;
+
+    // 2. ENSUITE, on crée le vecteur avec les valeurs calculées
     std::vector<std::array<float,4>> wallSegments = {
-        // bas
-        {-105.f, -148.5f, +105.f, -148.5f},
-        // droite
-        {+105.f, -148.5f, +105.f, +148.5f},
-        // haut
-        {+105.f, +148.5f, -105.f, +148.5f},
-        // gauche
-        {-105.f, +148.5f, -105.f, -148.5f}
+        // --- Murs Verticaux (Gauche & Droite) ---
+        // Ils font toute la hauteur + l'épaisseur des coins
+        {-105.f, -longY, -105.f, +longY}, // Gauche
+        {+105.f, -longY, +105.f, +longY}, // Droite
+
+        // --- Murs Horizontaux (Haut & Bas) ---
+        // Ils sont plus courts pour s'insérer entre les verticaux
+        {-shortX, +148.5f, +shortX, +148.5f}, // Haut
+        {-shortX, -148.5f, +shortX, -148.5f}  // Bas
     };
 
     // hauteur du mur = 40 mm par exemple
     float WALL_HEIGHT = 40.f;
 
     // création d’un seul mesh contenant tous les murs
-    glx::Mesh wallsMesh = glx::createWalls(wallSegments, WALL_HEIGHT);
+    float WALL_THICKNESS = 10.0f; // 1 cm d'épaisseur
+    glx::Mesh wallsMesh = glx::createWalls(wallSegments, WALL_HEIGHT, WALL_THICKNESS);
 
+    // 2. L'objet FIL DE FER (pour le noir) -> C'est cette ligne qui te manque !
+    glx::Mesh wallsWireframe = glx::createWallsWireframe(wallSegments, WALL_HEIGHT, WALL_THICKNESS);
     // --- Texture pour la frame vidéo ---
     cv::Mat frameRGBA;
     cv::cvtColor(frameBGR, frameRGBA, cv::COLOR_BGR2RGBA);
@@ -221,7 +267,7 @@ int main(int argc, char** argv) {
     // --- 4. CHARGEMENT DES TEXTURES ADDITIONNELLES ---
 
     // A. Sol VR (Pelouse)
-    cv::Mat grassImg = cv::imread("../data/pelouse.png");
+    cv::Mat grassImg = cv::imread("../data/sol.png");
     if(grassImg.empty()) std::cerr << "ERREUR: Pelouse introuvable !" << std::endl;
     else cv::cvtColor(grassImg, grassImg, cv::COLOR_BGR2RGB);
     GLuint grassTexID = glx::createTextureFromMat(grassImg);
@@ -287,79 +333,9 @@ int main(int argc, char** argv) {
       if (dt > 0.05f) dt = 0.05f;
 
       if (okDetect && !rvec.empty()) {
-
-          cv::Mat Rcv;
-          cv::Rodrigues(rvec, Rcv);
-
-          // Axes feuille (repère caméra)
-          glm::vec3 X(
-              Rcv.at<double>(0,0),
-              Rcv.at<double>(1,0),
-              Rcv.at<double>(2,0)
-          );
-          glm::vec3 Y(
-              Rcv.at<double>(0,1),
-              Rcv.at<double>(1,1),
-              Rcv.at<double>(2,1)
-          );
-          glm::vec3 N(
-              Rcv.at<double>(0,2),
-              Rcv.at<double>(1,2),
-              Rcv.at<double>(2,2)
-          );
-
-          // Normalisation OBLIGATOIRE
-          X = glm::normalize(X);
-          Y = glm::normalize(Y);
-          N = glm::normalize(N);
-
-          // Gravité monde (choix arbitraire mais stable)
-          // OpenCV : Z vers le bas
-          glm::vec3 gCam(0.f, 0.f, 1.f);
-          // Projection de la gravité sur le plan
-          glm::vec3 gPlane = gCam - glm::dot(gCam, N) * N;
-
-          // Accélération dans le plan (repère feuille)
-          float ax = glm::dot(gPlane, X);
-          float ay = glm::dot(gPlane, Y);
-          
-          // Zone morte pour éviter les micro-mouvements
-          if (std::abs(ax) < 0.1f) ax = 0.0f;
-          if (std::abs(ay) < 0.1f) ay = 0.0f;
-
-          float accel = 2000.f;  // Accélération plus forte pour compenser
-          float damping = 1.0f;  // Frottement fort
-          
-          ballVel.x += ax * accel * dt; // L'inclinaison Y contrôle la gauche/droite
-          ballVel.y += ay * accel * dt; // L'inclinaison X contrôle le haut/bas
-         
-          ballVel *= 1.f / (1.f + damping * dt);
-          glm::vec3 deplacement = ballVel * dt;
-          ballPos += deplacement;
-          float dist = glm::length(deplacement);
-          
-          if (dist > 0.0001f) {
-              // Axe de rotation = Mouvement X Verticale
-              glm::vec3 axis = glm::cross(deplacement, glm::vec3(0,0,1));
-              axis = glm::normalize(axis);
-              float angle = dist / ballRadius; // Angle = dist / rayon
-              // On accumule la rotation
-              ballRotationMatrix = glm::rotate(glm::mat4(1.0f), angle, axis) * ballRotationMatrix;
-          }
-
-          // Limites feuille A4
-          float minX = -105.f + ballRadius;
-          float maxX =  105.f - ballRadius;
-          float minY = -148.5f + ballRadius;
-          float maxY =  148.5f - ballRadius;
-
-          // Collisions
-          if (ballPos.x < minX) { ballPos.x = minX; ballVel.x *= -0.5f; }
-          if (ballPos.x > maxX) { ballPos.x = maxX; ballVel.x *= -0.5f; }
-          if (ballPos.y < minY) { ballPos.y = minY; ballVel.y *= -0.5f; }
-          if (ballPos.y > maxY) { ballPos.y = maxY; ballVel.y *= -0.5f; }
-
-          ballPos.z = ballRadius;
+          // Une seule ligne pour tout gérer !
+          ar::updatePhysics(rvec, dt, ballPos, ballVel, ballRotationMatrix, 
+                            ballRadius, wallSegments, WALL_THICKNESS);
       }
 
       // Conversion + flip (OpenGL en bas à gauche)
@@ -434,7 +410,7 @@ int main(int argc, char** argv) {
           glUniformMatrix4fv(ph_uModel, 1, GL_FALSE, glm::value_ptr(M_floor));
           glUniform3fv(ph_uViewPos, 1, glm::value_ptr(camPos));
           glUniform3fv(ph_uLightPos, 1, glm::value_ptr(lightPos));
-          glUniform3fv(ph_uLightColor, 1, glm::value_ptr(glm::vec3(1.0f)));
+          glUniform3fv(ph_uLightColor, 1, glm::value_ptr(glm::vec3(2.0f)));
 
           glActiveTexture(GL_TEXTURE0);
           glBindTexture(GL_TEXTURE_2D, grassTexID); // pelouse 
@@ -454,22 +430,34 @@ int main(int argc, char** argv) {
       glUniform2f(line_uViewport, (float)fbw, (float)fbh);
       glUniform1f(line_uThickness, THICKNESS_PX);
 
-      // === MURS (Couleur Unie 3D) ===
-      glUseProgram(solidProgram); // On repasse au shader de couleur simple
+     // === MURS ===
 
+      // 1. DESSIN SOLIDE (MARRON)
+      glUseProgram(solidProgram);
       glm::mat4 M_walls = glm::mat4(1.0f);
-      glm::mat4 MVP_walls = P * V * M_walls; // On calcule la matrice totale
+      glm::mat4 MVP_walls = P * V * M_walls;
 
-      // 1. Envoyer la matrice de position
       glUniformMatrix4fv(solid_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_walls));
-
-      // 2. Envoyer la couleur (Ici un Marron type "brique")
-      // Tu peux changer les chiffres (Red, Green, Blue) entre 0.0 et 1.0
-      glUniform3f(solid_uColor, 0.6f, 0.3f, 0.2f); 
-
-      // 3. Dessiner
+      glUniform3f(solid_uColor, 0.6f, 0.3f, 0.2f); // Marron
+      
+      // Petit décalage pour éviter que le marron ne cache les traits noirs
+      glEnable(GL_POLYGON_OFFSET_FILL);
+      glPolygonOffset(1.0f, 1.0f);
+      
       glBindVertexArray(wallsMesh.vao);
       glDrawElements(GL_TRIANGLES, wallsMesh.count, GL_UNSIGNED_INT, 0);
+      glDisable(GL_POLYGON_OFFSET_FILL);
+
+      // 2. DESSIN CONTOURS (NOIR) - SANS DIAGONALES
+      // On utilise "solidProgram" en mettant la couleur noire
+      glUniform3f(solid_uColor, 0.0f, 0.0f, 0.0f); // Noir pur
+      
+      glBindVertexArray(wallsWireframe.vao);
+      // ATTENTION : Ici on dessine des LIGNES (GL_LINES), pas des triangles !
+      glDrawElements(GL_LINES, wallsWireframe.count, GL_UNSIGNED_INT, 0);
+      
+      glBindVertexArray(0);
+
       // === BALLE ===      
       // ==========================================
       // 1. OMBRE (Shadow) - Projection sur le sol
@@ -507,7 +495,7 @@ int main(int argc, char** argv) {
       // Lumière et Caméra
       glUniform3fv(ph_uViewPos, 1, glm::value_ptr(camPos));
       glUniform3fv(ph_uLightPos, 1, glm::value_ptr(lightPos));
-      glUniform3fv(ph_uLightColor, 1, glm::value_ptr(glm::vec3(1.0f))); // Lumière blanche
+      glUniform3fv(ph_uLightColor, 1, glm::value_ptr(glm::vec3(2.0f))); // Lumière blanche
 
       // Texture
       glActiveTexture(GL_TEXTURE0);

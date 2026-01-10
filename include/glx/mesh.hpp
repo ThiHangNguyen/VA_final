@@ -31,7 +31,8 @@ Mesh createCubeWireframe(float size);
 Axes createAxes(float L);
 
 // Mur vertical entre (x1,y1) et (x2,y2) avec une certaine hauteur
-Mesh createWall(float x1, float y1, float x2, float y2, float height);
-Mesh createWalls(const std::vector<std::array<float,4>>& segments, float height);
+Mesh createWall(float x1, float y1, float x2, float y2, float height, float thickness);
+Mesh createWalls(const std::vector<std::array<float,4>>& segments, float height, float thickness);
 Mesh createSphere(float radius, int slices, int stacks);
+Mesh createWallsWireframe(const std::vector<std::array<float,4>>& segments, float height, float thickness);
 } // namespace glx

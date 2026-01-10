@@ -212,8 +212,8 @@ uniform vec3 uLightColor;
 
 void main() {
     // Config materiau
-    float ambientStrength = 0.8;
-    float specularStrength = 0.5;
+    float ambientStrength = 0.4;
+    float specularStrength = 0.8;
     float shininess = 32.0;
 
     // 1. Ambiant
