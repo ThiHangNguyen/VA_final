@@ -7,6 +7,7 @@
 
 #include "ar/calib.hpp"           // Chargement des paramètres de calibration
 #include "ar/pose.hpp"            // Projection / View OpenGL à partir de rvec/tvec
+#include "ar/render.hpp"          // Création du contexte de rendu AR
 #include "detect/a4.hpp"          // Détection des coins de la feuille A4
 #include "glx/mesh.hpp"           // Création des maillages 3D
 #include "glx/shaders.hpp"        // Compilation / linkage des shaders
@@ -14,111 +15,24 @@
 #include "ar/physics.hpp"        // Gestion des collisions
 #include "glx/cleanup.hpp"        // Nettoyage à la fin
 
+#include "app/init.hpp"          // Initialisation OpenGL
+#include "app/input.hpp"         // Parsing des arguments d'entrée
+
 #include <iostream>
 #include <stdexcept>
 #include <vector>
 
-
-
 int main(int argc, char** argv) {
   try {
-    // --- Lecture des arguments : choix entre webcam ou vidéo ---
-    std::string calibPath = "../data/camera.yaml";   
-    std::string videoPath = "../data/Video_AR_1.mp4";       // Par défaut : chemin de la vidéo  
-    std::string phoneUrl  = "";                         // URL pour DroidCam
+    InputConfig cfg;
+    if (!parseArgs(argc, argv, cfg)) {
+        return -1;
+    }
     cv::VideoCapture cap;
-    bool useWebcam = false;
-    bool usePhone  = false;
-    // --- Interprétation des arguments ---
-    if (argc > 1) {
-        std::string arg1 = argv[1];
-
-        if (arg1 == "--webcam") {
-            useWebcam = true;
-            calibPath = "../data/camera_webcam.yaml";
-        } 
-        else if (arg1 == "--phone") {
-            // Usage: ./AR_A4_Video --phone http://192.168.1.47:4747/video
-            if (argc < 3) {
-                std::cerr << "Usage: ./AR_A4_Video --phone <url_droidcam>\n"
-                          << "Exemple: http://192.168.1.15:4747/video\n";
-                return -1;
-            }
-            usePhone = true;
-            phoneUrl = argv[2];
-            // On garde camera.yaml ou on en crée un camera_phone.yaml si besoin
-            calibPath = "../data/camera.yaml"; 
-        }
-        else if (arg1 == "--video") {
-            if (argc < 4) {
-                std::cerr << "Usage: ./AR_A4_Video --video <video_path> <calibration_path>\n";
-                return -1;
-            }
-            videoPath = argv[2];
-            calibPath = argv[3];
-        } 
-        else {
-            std::cerr << "Argument inconnu : " << arg1 << "\n";
-            return -1;
-        }
-    }
-
-    // --- Ouverture de la source vidéo ---
-    if (useWebcam) {
-        int camIndex = 0;
-        int reqW = 1280, reqH = 720, reqFPS = 30;
-
-        if (!cap.open(camIndex, cv::CAP_V4L2)) {
-            std::cerr << "Erreur : webcam non accessible !\n";
-            return -1;
-        }
-
-        // Premier essai avec MJPEG
-        cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
-        cap.set(cv::CAP_PROP_FRAME_WIDTH,  reqW);
-        cap.set(cv::CAP_PROP_FRAME_HEIGHT, reqH);
-        cap.set(cv::CAP_PROP_FPS,          reqFPS);
-
-        // Si échec, fallback YUYV
-        if ((int)cap.get(cv::CAP_PROP_FRAME_WIDTH) != reqW ||
-            (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT) != reqH ||
-            (int)std::round(cap.get(cv::CAP_PROP_FPS)) != reqFPS) {
-            cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('Y','U','Y','V'));
-            cap.set(cv::CAP_PROP_FRAME_WIDTH,  reqW);
-            cap.set(cv::CAP_PROP_FRAME_HEIGHT, reqH);
-            cap.set(cv::CAP_PROP_FPS,          reqFPS);
-        }
-
-        std::cout << "[INFO] Webcam ouverte => "
-                  << (int)cap.get(cv::CAP_PROP_FRAME_WIDTH) << "x"
-                  << (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ "
-                  << (int)cap.get(cv::CAP_PROP_FPS) << " FPS\n";
-
-    } else if (usePhone) {
-        std::cout << "[INFO] Tentative de connexion a DroidCam: " << phoneUrl << std::endl;
-        
-        // OpenCV ouvre l'URL comme un fichier vidéo
-        if (!cap.open(phoneUrl)) {
-            std::cerr << "Erreur : Impossible de se connecter au flux téléphone !\n"
-                      << "Vérifiez que DroidCam est lancé et que l'IP est correcte.\n";
-            return -1;
-        }
-        
-        // Parfois DroidCam démarre lentement, on peut attendre un peu ou vérifier
-        std::cout << "[INFO] Flux téléphone ouvert avec succès.\n";
-    }
-    else {
-        // [VIDEO CLASSIQUE]
-        std::cout << "[INFO] Lecture fichier video: " << videoPath << std::endl;
-        if (!cap.open(videoPath)) {
-            std::cerr << "Erreur : impossible d’ouvrir la vidéo : " << videoPath << "\n";
-            return -1;
-        }
-    }
+    if (!openVideoSource(cap, cfg)) return -1;
 
     // --- Chargement calibration ---
-    const ar::Calibration calib = ar::loadCalibration(calibPath);
-
+    const ar::Calibration calib = ar::loadCalibration(cfg.calibPath);
     // --- Lecture de la première frame ---
     cv::Mat frameBGR;
     if (!cap.read(frameBGR) || frameBGR.empty()) {
@@ -128,110 +42,26 @@ int main(int argc, char** argv) {
     int vw = frameBGR.cols, vh = frameBGR.rows;
 
     // --- Initialisation GLFW + fenêtre ---
-    if (!glfwInit()) return -1;
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  #ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-  #endif
-    GLFWwindow* window = glfwCreateWindow(vw, vh, "ARCube", nullptr, nullptr);
-    if (!window) { glfwTerminate(); return -1; }
-    glfwMakeContextCurrent(window); glfwSwapInterval(1);
+    GLContext gl = initOpenGL("AR Ball", vw, vh);
+    GLFWwindow* window = gl.window;
 
-    glewExperimental = GL_TRUE;
-    if (glewInit() != GLEW_OK) { std::cerr << "GLEW init failed\n"; return -1; }
-    glGetError(); // Ignore l'erreur générée par glewInit
 
     // --- Shaders ---
-    GLuint bgVS = glx::compile(GL_VERTEX_SHADER,   glx::BG_VS);
-    GLuint bgFS = glx::compile(GL_FRAGMENT_SHADER, glx::BG_FS);
-    GLuint bgProgram = glx::link({ bgVS, bgFS });
-    glDeleteShader(bgVS); glDeleteShader(bgFS);
-
-    GLuint lineVS = glx::compile(GL_VERTEX_SHADER,   glx::LINE_VS);
-    GLuint lineGS = glx::compile(GL_GEOMETRY_SHADER, glx::LINE_GS);
-    GLuint lineFS = glx::compile(GL_FRAGMENT_SHADER, glx::LINE_FS);
-    GLuint lineProgram = glx::link({ lineVS, lineGS, lineFS });
-    glDeleteShader(lineVS); glDeleteShader(lineGS); glDeleteShader(lineFS);
-
-    GLuint solidVS = glx::compile(GL_VERTEX_SHADER, glx::SOLID_VS);
-    GLuint solidFS = glx::compile(GL_FRAGMENT_SHADER, glx::SOLID_FS);
-    GLuint solidProgram = glx::link({solidVS, solidFS});
-    glDeleteShader(solidVS);
-    glDeleteShader(solidFS);
-
-    // --- Meshes (quad fond, cube, axes) ---
-    glx::Mesh bg   = glx::createBackgroundQuad();
-    // glx::Mesh cube = glx::createCubeWireframe(30.0f);
-    glx::Axes axes = glx::createAxes(210.0f);
-    // petite croix pour représenter la balle
-    glx::Axes ballAxes = glx::createAxes(10.f);
-
-    // === murs sur les bords A4 ===
-   // On élargit un peu le cadre pour que les coins se croisent
-    // Au lieu de 105 et 148.5, on pousse un peu plus loin
-    float extX = 105.0f + 6.0f;  // + demi-épaisseur
-    float extY = 148.5f + 6.0f; 
+    ARRenderContext renderCtx = createRenderContext();
 
     // === MURS CADRE A4 (Assemblage "Menuisier") ===
-    
-    // 1. D'ABORD, on calcule les dimensions
-    // Les murs Verticaux sont "LONGS" : ils vont jusqu'à 148.5 + 5mm = 153.5
-    float longY = 148.5f + 5.0f; 
-
-    // Les murs Horizontaux sont "COURTS" : ils s'arrêtent à 105 - 5mm = 100
-    float shortX = 105.0f - 5.0f;
-
-    // 2. ENSUITE, on crée le vecteur avec les valeurs calculées
-    std::vector<std::array<float,4>> wallSegments = {
-        // --- Murs Verticaux (Gauche & Droite) ---
-        // Ils font toute la hauteur + l'épaisseur des coins
-        {-105.f, -longY, -105.f, +longY}, // Gauche
-        {+105.f, -longY, +105.f, +longY}, // Droite
-
-        // --- Murs Horizontaux (Haut & Bas) ---
-        // Ils sont plus courts pour s'insérer entre les verticaux
-        {-shortX, +148.5f, +shortX, +148.5f}, // Haut
-        {-shortX, -148.5f, +shortX, -148.5f}  // Bas
-    };
-
-    // hauteur du mur = 40 mm par exemple
     float WALL_HEIGHT = 40.f;
+    float WALL_THICKNESS = 10.0f; 
 
-    // création d’un seul mesh contenant tous les murs
-    float WALL_THICKNESS = 10.0f; // 1 cm d'épaisseur
-    glx::Mesh wallsMesh = glx::createWalls(wallSegments, WALL_HEIGHT, WALL_THICKNESS);
+    auto mazeWalls = glx::createMazeLayout(WALL_THICKNESS);
+    glx::Mesh wallsMesh = glx::createWalls(mazeWalls, WALL_HEIGHT, WALL_THICKNESS);
+    glx::Mesh wallsWireframe = glx::createWallsWireframe(mazeWalls, WALL_HEIGHT, WALL_THICKNESS);
 
-    // 2. L'objet FIL DE FER (pour le noir) -> C'est cette ligne qui te manque !
-    glx::Mesh wallsWireframe = glx::createWallsWireframe(wallSegments, WALL_HEIGHT, WALL_THICKNESS);
     // --- Texture pour la frame vidéo ---
     cv::Mat frameRGBA;
     cv::cvtColor(frameBGR, frameRGBA, cv::COLOR_BGR2RGBA);
     GLuint bgTex = glx::createTextureRGBA(frameRGBA.cols, frameRGBA.rows);
 
-    glEnable(GL_DEPTH_TEST);
-    glClearColor(0.05f, 0.05f, 0.06f, 1.0f);
-
-    // --- Uniforms pour les shaders ---
-    GLint bg_uTex         = glGetUniformLocation(bgProgram,   "uTex");
-    GLint line_uMVP       = glGetUniformLocation(lineProgram, "uMVP");
-    GLint line_uColor     = glGetUniformLocation(lineProgram, "uColor");
-    GLint line_uThickness = glGetUniformLocation(lineProgram, "uThicknessPx");
-    GLint line_uViewport  = glGetUniformLocation(lineProgram, "uViewport");
-    const float THICKNESS_PX = 3.0f;
-
-    GLint solid_uMVP   = glGetUniformLocation(solidProgram, "uMVP");
-    GLint solid_uColor = glGetUniformLocation(solidProgram, "uColor");
-
-    // --- Coordonnées 3D de la feuille A4 ---
-    const float W = 210.f, H = 297.f;
-    std::vector<cv::Point3f> objectPts = {
-      {-W*0.5f, -H*0.5f, 0.0f},
-      {+W*0.5f, -H*0.5f, 0.0f},
-      {+W*0.5f, +H*0.5f, 0.0f},
-      {-W*0.5f, +H*0.5f, 0.0f}
-    };
 
     cv::Mat rvec, tvec; // Rotation et translation
     // =========================
@@ -239,7 +69,24 @@ int main(int argc, char** argv) {
     // =========================
     glm::vec3 ballPos(0.f, 0.f, 8.f);   // Position initiale
     glm::vec3 ballVel(0.f);             // Vitesse
-    float ballRadius = 8.f;             // Rayon
+    float ballRadius = 8.f; 
+
+
+    // --- Uniforms pour les shaders ---
+    GLint bg_uTex         = glGetUniformLocation(renderCtx.bgProgram,   "uTex");
+    GLint line_uMVP       = glGetUniformLocation(renderCtx.lineProgram, "uMVP");
+    GLint line_uColor     = glGetUniformLocation(renderCtx.lineProgram, "uColor");
+    GLint line_uThickness = glGetUniformLocation(renderCtx.lineProgram, "uThicknessPx");
+    GLint line_uViewport  = glGetUniformLocation(renderCtx.lineProgram, "uViewport");
+    const float THICKNESS_PX = 3.0f;
+
+    GLint solid_uMVP   = glGetUniformLocation(renderCtx.solidProgram, "uMVP");
+    GLint solid_uColor = glGetUniformLocation(renderCtx.solidProgram, "uColor");
+
+    // --- Coordonnées 3D de la feuille A4 ---
+    std::vector<cv::Point3f> objectPts = detect::getA4ObjectPoints();
+
+            // Rayon
     // 1. Charger le Shader de Texture et les ombres
 
     // Shader éclairage Phong (lumière + texture)
@@ -255,8 +102,6 @@ int main(int argc, char** argv) {
     GLuint shadowProgram = glx::link({glx::compile(GL_VERTEX_SHADER, glx::SHADOW_VS), glx::compile(GL_FRAGMENT_SHADER, glx::SHADOW_FS)});
     GLint sh_uMVP = glGetUniformLocation(shadowProgram, "uMVP");
     GLint sh_uColor = glGetUniformLocation(shadowProgram, "uColor");
-    // 2. Créer la sphère
-    glx::Mesh ballMesh = glx::createSphere(ballRadius, 32, 32);
 
     // 3. Charger l'image de la balle
     cv::Mat ballImg = cv::imread("../data/balle.png"); 
@@ -335,21 +180,11 @@ int main(int argc, char** argv) {
       if (okDetect && !rvec.empty()) {
           // Une seule ligne pour tout gérer !
           ar::updatePhysics(rvec, dt, ballPos, ballVel, ballRotationMatrix, 
-                            ballRadius, wallSegments, WALL_THICKNESS);
+                      ballRadius, mazeWalls, WALL_THICKNESS);
       }
 
-      // Conversion + flip (OpenGL en bas à gauche)
-      cv::cvtColor(frameBGR, frameRGBA, cv::COLOR_BGR2RGBA);
-      cv::flip(frameRGBA, frameRGBA, 0);
-
-      // Resize si résolution change (webcam)
-      static int texW = frameRGBA.cols, texH = frameRGBA.rows;
-      if (frameRGBA.cols != texW || frameRGBA.rows != texH) {
-        glDeleteTextures(1, &bgTex);
-        bgTex = glx::createTextureRGBA(frameRGBA.cols, frameRGBA.rows);
-        texW = frameRGBA.cols; texH = frameRGBA.rows;
-      }
-      glx::updateTextureRGBA(bgTex, frameRGBA);
+      // --- Mise à jour de la texture de fond ---
+      updateVideoBackground(bgTex, frameBGR);
 
       // === RENDU OPENGL ===
       glfwPollEvents();
@@ -376,7 +211,7 @@ int main(int argc, char** argv) {
 
       // --- 1. GESTION DU FOND (AR ou VR) ---
       glDisable(GL_DEPTH_TEST); // Le fond est derrière tout
-      glUseProgram(bgProgram);
+      glUseProgram(renderCtx.bgProgram);
       glActiveTexture(GL_TEXTURE0);
 
       if (!isVR) {
@@ -390,8 +225,8 @@ int main(int argc, char** argv) {
       }
 
       glUniform1i(bg_uTex, 0);
-      glBindVertexArray(bg.vao);
-      glDrawArrays(GL_TRIANGLES, 0, bg.count);
+      glBindVertexArray(renderCtx.bg.vao);
+      glDrawArrays(GL_TRIANGLES, 0, renderCtx.bg.count);
       glBindVertexArray(0);
       
       // On nettoie le depth buffer pour dessiner la 3D par dessus le fond
@@ -402,137 +237,29 @@ int main(int argc, char** argv) {
       // B. SOL PELOUSE (Uniquement en VR)
       // ==========================================
       if (isVR) {
-          glUseProgram(phongProgram);
-          // La feuille fait 210x297. Le quad fait 2x2.
-          glm::mat4 M_floor = glm::scale(glm::mat4(1.0f), glm::vec3(105.f, 148.5f, 1.f));
-          
-          glUniformMatrix4fv(ph_uMVP, 1, GL_FALSE, glm::value_ptr(P * V * M_floor));
-          glUniformMatrix4fv(ph_uModel, 1, GL_FALSE, glm::value_ptr(M_floor));
-          glUniform3fv(ph_uViewPos, 1, glm::value_ptr(camPos));
-          glUniform3fv(ph_uLightPos, 1, glm::value_ptr(lightPos));
-          glUniform3fv(ph_uLightColor, 1, glm::value_ptr(glm::vec3(2.0f)));
-
-          glActiveTexture(GL_TEXTURE0);
-          glBindTexture(GL_TEXTURE_2D, grassTexID); // pelouse 
-          glUniform1i(ph_uTex, 0);
-          
-
-          glBindVertexArray(floorMesh.vao);
-          glDrawArrays(GL_TRIANGLES, 0, floorMesh.count);
+          // --- Rendu du sol en mode VR ---
+          drawVRFloor(isVR, phongProgram, P, V, camPos, lightPos, grassTexID, floorMesh, 
+            ph_uMVP, ph_uModel, ph_uViewPos, ph_uLightPos, ph_uLightColor, ph_uTex);
       }
 
-      // --- 2. Cube et axes ---
-      glEnable(GL_DEPTH_TEST);
-      glm::mat4 M_axes = glm::mat4(1.0f);
-      glm::mat4 M_cube = glm::translate(glm::mat4(1.0f), glm::vec3(0.f, 0.f, 30.f));
 
-      glUseProgram(lineProgram);
-      glUniform2f(line_uViewport, (float)fbw, (float)fbh);
-      glUniform1f(line_uThickness, THICKNESS_PX);
-
-     // === MURS ===
-
-      // 1. DESSIN SOLIDE (MARRON)
-      glUseProgram(solidProgram);
-      glm::mat4 M_walls = glm::mat4(1.0f);
-      glm::mat4 MVP_walls = P * V * M_walls;
-
-      glUniformMatrix4fv(solid_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_walls));
-      glUniform3f(solid_uColor, 0.6f, 0.3f, 0.2f); // Marron
-      
-      // Petit décalage pour éviter que le marron ne cache les traits noirs
-      glEnable(GL_POLYGON_OFFSET_FILL);
-      glPolygonOffset(1.0f, 1.0f);
-      
-      glBindVertexArray(wallsMesh.vao);
-      glDrawElements(GL_TRIANGLES, wallsMesh.count, GL_UNSIGNED_INT, 0);
-      glDisable(GL_POLYGON_OFFSET_FILL);
-
-      // 2. DESSIN CONTOURS (NOIR) - SANS DIAGONALES
-      // On utilise "solidProgram" en mettant la couleur noire
-      glUniform3f(solid_uColor, 0.0f, 0.0f, 0.0f); // Noir pur
-      
-      glBindVertexArray(wallsWireframe.vao);
-      // ATTENTION : Ici on dessine des LIGNES (GL_LINES), pas des triangles !
-      glDrawElements(GL_LINES, wallsWireframe.count, GL_UNSIGNED_INT, 0);
-      
-      glBindVertexArray(0);
+     // === MURS === (+ contours)
+      drawWalls(wallsMesh, wallsWireframe, P, V, renderCtx.solidProgram, solid_uMVP, solid_uColor);
 
       // === BALLE ===      
-      // ==========================================
-      // 1. OMBRE (Shadow) - Projection sur le sol
-      // ==========================================
-      glEnable(GL_BLEND);
-      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-      glUseProgram(shadowProgram);
-
-      // Matrice de projection sur le sol (Z=0) selon la lumière (Directionnelle)
-      glm::mat4 shadowProj(1.0f);
-      shadowProj[2][0] = -lightPos.x / lightPos.z;
-      shadowProj[2][1] = -lightPos.y / lightPos.z;
-      shadowProj[2][2] = 0.0f;
-
-      glm::mat4 M_ball_world = glm::translate(glm::mat4(1.0f), ballPos) * ballRotationMatrix;
-      
-      glm::mat4 M_shadow = glm::translate(glm::mat4(1.0f), glm::vec3(0,0,0.1f)) * shadowProj * M_ball_world;
-
-      glUniformMatrix4fv(sh_uMVP, 1, GL_FALSE, glm::value_ptr(P * V * M_shadow));
-      glUniform4f(sh_uColor, 0.1f, 0.1f, 0.1f, 0.5f); // Noir transparent
-      
-      glBindVertexArray(ballMesh.vao);
-      glDrawElements(GL_TRIANGLES, ballMesh.count, GL_UNSIGNED_INT, 0);
-      glDisable(GL_BLEND);
+      // --- Rendu de l'Ombre ---
+      drawBallShadow(renderCtx.ball, P, V, ballPos, ballRotationMatrix, lightPos, 
+                    shadowProgram, sh_uMVP, sh_uColor);
 
       // ==========================================
       // 2. BALLE (Phong) - Eclairage Réaliste
       // ==========================================
-      glUseProgram(phongProgram); 
-      glm::mat4 M_ball = glm::translate(glm::mat4(1.f), ballPos) * ballRotationMatrix;
-      
-      glUniformMatrix4fv(ph_uMVP, 1, GL_FALSE, glm::value_ptr(P * V * M_ball));
-      glUniformMatrix4fv(ph_uModel, 1, GL_FALSE, glm::value_ptr(M_ball));
-      
-      // Lumière et Caméra
-      glUniform3fv(ph_uViewPos, 1, glm::value_ptr(camPos));
-      glUniform3fv(ph_uLightPos, 1, glm::value_ptr(lightPos));
-      glUniform3fv(ph_uLightColor, 1, glm::value_ptr(glm::vec3(2.0f))); // Lumière blanche
-
-      // Texture
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, ballTextureID);
-      glUniform1i(ph_uTex, 0);
-
-      glBindVertexArray(ballMesh.vao);
-      glDrawElements(GL_TRIANGLES, ballMesh.count, GL_UNSIGNED_INT, 0);
+      // --- Rendu de la Balle ---
+      drawBall(renderCtx.ball, ballTextureID, P, V, ballPos, ballRotationMatrix, 
+              camPos, lightPos, phongProgram, 
+              ph_uMVP, ph_uModel, ph_uViewPos, ph_uLightPos, ph_uLightColor, ph_uTex);
       // === AXES ===
-      glUseProgram(lineProgram);
-      glm::mat4 MVP_axes = P * V;
-      glUniformMatrix4fv(line_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_axes));
- 
-      // Axe X — rouge
-      glUniform3f(line_uColor, 1.f, 0.f, 0.f);
-      glBindVertexArray(axes.x.vao);
-      glDrawArrays(GL_LINES, 0, axes.x.count);
-
-      // Axe Y — vert
-      glUniform3f(line_uColor, 0.f, 1.f, 0.f);
-      glBindVertexArray(axes.y.vao);
-      glDrawArrays(GL_LINES, 0, axes.y.count);
-
-      // Axe Z — bleu
-      glUniform3f(line_uColor, 0.f, 0.f, 1.f);
-      glBindVertexArray(axes.z.vao);
-      glDrawArrays(GL_LINES, 0, axes.z.count);
-
-      glBindVertexArray(0);
-
-      // glm::mat4 MVP_cube = P * V * M_cube;
-      // glUniformMatrix4fv(line_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_cube));
-      // glUniform3f(line_uColor, 0.f, 0.f, 0.f);
-      // glBindVertexArray(cube.vao);
-      // glDrawElements(GL_LINES, cube.count, GL_UNSIGNED_INT, 0);
-      // glBindVertexArray(0);
-      
+      drawCoordinateAxes(renderCtx, P, V, line_uMVP, line_uColor, line_uViewport, line_uThickness, fbw, fbh, THICKNESS_PX);
       glfwSwapBuffers(window);
     }
 
@@ -542,7 +269,8 @@ int main(int argc, char** argv) {
     glDeleteVertexArrays(1, &floorMesh.vao); glDeleteBuffers(1, &floorMesh.vbo);
 
     // --- Nettoyage OpenGL ---
-    glx::cleanup(bgProgram, lineProgram, solidProgram, phongProgram, shadowProgram, bgTex, ballTextureID, bg, wallsMesh, ballMesh, axes, window);
+    glx::cleanup(renderCtx.bgProgram, renderCtx.lineProgram, renderCtx.solidProgram, phongProgram, shadowProgram, bgTex, ballTextureID, renderCtx.bg, wallsMesh, renderCtx.ball, renderCtx.axes, window);
+
     return 0;
     
   } catch (const std::exception& e) {

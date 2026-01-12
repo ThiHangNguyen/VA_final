@@ -1,3 +1,0 @@
-/home/user/realité augmentée, virtuelle, mixte/VA_final/build/CMakeFiles/AR_A4_Video.dir
-/home/user/realité augmentée, virtuelle, mixte/VA_final/build/CMakeFiles/edit_cache.dir
-/home/user/realité augmentée, virtuelle, mixte/VA_final/build/CMakeFiles/rebuild_cache.dir

@@ -3,7 +3,7 @@
 #include <array>        // OBLIGATOIRE pour std::array
 #include <glm/glm.hpp>  // OBLIGATOIRE pour glm::vec3
 #include <cmath> // Pour sqrt
-
+#include <opencv2/imgproc.hpp>
 namespace glx {
 
 /**
@@ -109,6 +109,21 @@ Axes createAxes(float L) {
 
   return A;
 }
+std::vector<Wall> createMazeLayout(float thickness) {
+    std::vector<Wall> maze;
+    float hT = thickness / 2.0f;
+    
+    // Cadre extérieur A4
+    maze.push_back({{-105.f, -(148.5f + hT)}, {-105.f, +(148.5f + hT)}}); // Gauche
+    maze.push_back({{+105.f, -(148.5f + hT)}, {+105.f, +(148.5f + hT)}}); // Droite
+    maze.push_back({{-(105.f - hT), 148.5f}, {+(105.f - hT), 148.5f}});   // Haut
+    maze.push_back({{-(105.f - hT), -148.5f}, {+(105.f - hT), -148.5f}}); // Bas
+
+    // Ajoutez vos murs de jeu ici !
+    maze.push_back({{-105.f, 0.f}, {-30.f, 0.f}}); 
+    
+    return maze;
+}
 
 // ========================================================
 //  CRÉATION D’UN MUR SIMPLE (segment 3D + hauteur)
@@ -155,97 +170,92 @@ Mesh createWall(float x1, float y1, float x2, float y2, float height)
     glBindVertexArray(0);
     return m;
 }
-
-
 // ========================================================
 //  CRÉATION DE PLUSIEURS MURS EN UN SEUL MESH
 // ========================================================
-Mesh createWalls(const std::vector<std::array<float,4>>& segments,
-                 float height, float thickness)
+Mesh createWalls(const std::vector<Wall>& segments, float height, float thickness)
 {
     std::vector<float> vertices;
     std::vector<GLuint> indices;
-    GLuint idx = 0; // Compteur pour les indices
+    GLuint idx = 0; // Compteur pour les indices de sommets
 
     float halfT = thickness / 2.0f;
 
-    for (const auto& s : segments)
+    for (const auto& wall : segments)
     {
-        float x1 = s[0], y1 = s[1];
-        float x2 = s[2], y2 = s[3];
+        // Utilisation de la structure Wall
+        float x1 = wall.start.x;
+        float y1 = wall.start.y;
+        float x2 = wall.end.x;
+        float y2 = wall.end.y;
 
-        // 1. Calcul du vecteur direction du mur
+        // 1. Calcul du vecteur direction et longueur
         float dx = x2 - x1;
         float dy = y2 - y1;
         float len = std::sqrt(dx*dx + dy*dy);
         
-        if (len < 0.001f) continue; // Sécurité si longueur nulle
+        if (len < 0.001f) continue; 
 
-        // 2. Calcul du vecteur normal (perpendiculaire) unitaire
-        // Normal (-dy, dx) normalisé
+        // 2. Calcul du vecteur normal (perpendiculaire) pour l'épaisseur
         float nx = -dy / len;
         float ny =  dx / len;
 
-        // 3. Calcul du décalage pour l'épaisseur
+        // 3. Décalage
         float ox = nx * halfT;
         float oy = ny * halfT;
 
-        // 4. Les 4 coins de la base du mur (au sol)
-        // A (x1 décalé gauche), B (x1 décalé droite)
-        // C (x2 décalé droite), D (x2 décalé gauche)
+        // 4. Les 4 coins de la base (Z=0)
         float Ax = x1 + ox, Ay = y1 + oy;
         float Bx = x1 - ox, By = y1 - oy;
         float Cx = x2 - ox, Cy = y2 - oy;
         float Dx = x2 + ox, Dy = y2 + oy;
 
-        // --- Construction des sommets (Vertices) ---
-        // On va créer un cube : 8 sommets par mur (4 en bas, 4 en haut)
+        // --- Ajout des sommets (8 par mur : 4 bas, 4 haut) ---
         
-        // Z = 0 (Bas) -> Indices idx+0 à idx+3
+        // Bas (Z = 0)
         float baseV[] = {
-            Ax, Ay, 0.0f,  // 0: A bas
-            Bx, By, 0.0f,  // 1: B bas
-            Cx, Cy, 0.0f,  // 2: C bas
-            Dx, Dy, 0.0f   // 3: D bas
+            Ax, Ay, 0.0f,  // idx + 0
+            Bx, By, 0.0f,  // idx + 1
+            Cx, Cy, 0.0f,  // idx + 2
+            Dx, Dy, 0.0f   // idx + 3
         };
         vertices.insert(vertices.end(), baseV, baseV + 12);
 
-        // Z = height (Haut) -> Indices idx+4 à idx+7
+        // Haut (Z = height)
         float topV[] = {
-            Ax, Ay, height, // 4: A haut
-            Bx, By, height, // 5: B haut
-            Cx, Cy, height, // 6: C haut
-            Dx, Dy, height  // 7: D haut
+            Ax, Ay, height, // idx + 4
+            Bx, By, height, // idx + 5
+            Cx, Cy, height, // idx + 6
+            Dx, Dy, height  // idx + 7
         };
         vertices.insert(vertices.end(), topV, topV + 12);
 
-        // --- Construction des triangles (Indices) ---
-        // Il faut fermer la boîte (Côtés + Haut + Bas éventuellement)
+        // --- Construction des triangles (Faces de la boîte) ---
         
-        // Face 1 (Longer A->D) : 0,3,7,4
+        // Face latérale 1 (A-D-D'-A')
         indices.push_back(idx+0); indices.push_back(idx+3); indices.push_back(idx+7);
         indices.push_back(idx+0); indices.push_back(idx+7); indices.push_back(idx+4);
 
-        // Face 2 (Longer B->C) : 1,5,6,2
+        // Face latérale 2 (B-C-C'-B')
         indices.push_back(idx+1); indices.push_back(idx+5); indices.push_back(idx+6);
         indices.push_back(idx+1); indices.push_back(idx+6); indices.push_back(idx+2);
 
-        // Face 3 (Bout 1 A->B) : 0,4,5,1
+        // Face d'extrémité 1 (A-B-B'-A')
         indices.push_back(idx+0); indices.push_back(idx+4); indices.push_back(idx+5);
         indices.push_back(idx+0); indices.push_back(idx+5); indices.push_back(idx+1);
 
-        // Face 4 (Bout 2 D->C) : 3,2,6,7
+        // Face d'extrémité 2 (D-C-C'-D')
         indices.push_back(idx+3); indices.push_back(idx+2); indices.push_back(idx+6);
         indices.push_back(idx+3); indices.push_back(idx+6); indices.push_back(idx+7);
 
-        // Face 5 (Dessus - Le toit) : 4,7,6,5
+        // Face supérieure (Toit)
         indices.push_back(idx+4); indices.push_back(idx+7); indices.push_back(idx+6);
         indices.push_back(idx+4); indices.push_back(idx+6); indices.push_back(idx+5);
 
-        // On passe au mur suivant (8 sommets ajoutés)
         idx += 8;
     }
 
+    // --- Génération des buffers OpenGL ---
     Mesh m;
     m.count = (GLsizei)indices.size();
 
@@ -254,19 +264,94 @@ Mesh createWalls(const std::vector<std::array<float,4>>& segments,
     glGenBuffers(1, &m.ebo);
 
     glBindVertexArray(m.vao);
-
     glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size()*sizeof(float), vertices.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size()*sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
 
+    // Attribut 0 : Position (x, y, z)
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
     glBindVertexArray(0);
     return m;
 }
+// ========================================================
+//  CRÉATION DE PLUSIEURS MURS EN UN SEUL MESH
+// ========================================================
+Mesh createWallsWireframe(const std::vector<Wall>& segments, float height, float thickness)
+{
+    std::vector<float> vertices;
+    std::vector<GLuint> indices;
+    GLuint idx = 0; 
+
+    float halfT = thickness / 2.0f;
+
+    for (const auto& wall : segments)
+    {
+        // Utilisation des propriétés de la structure Wall
+        float x1 = wall.start.x; float y1 = wall.start.y;
+        float x2 = wall.end.x;   float y2 = wall.end.y;
+
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float len = std::sqrt(dx*dx + dy*dy);
+        if (len < 0.001f) continue;
+
+        float nx = -dy / len;
+        float ny =  dx / len;
+        float ox = nx * halfT;
+        float oy = ny * halfT;
+
+        float Ax = x1 + ox, Ay = y1 + oy;
+        float Bx = x1 - ox, By = y1 - oy;
+        float Cx = x2 - ox, Cy = y2 - oy;
+        float Dx = x2 + ox, Dy = y2 + oy;
+
+        // --- Sommets ---
+        float baseV[] = { Ax, Ay, 0.0f,  Bx, By, 0.0f,  Cx, Cy, 0.0f,  Dx, Dy, 0.0f };
+        vertices.insert(vertices.end(), baseV, baseV + 12);
+        float topV[] = { Ax, Ay, height, Bx, By, height, Cx, Cy, height, Dx, Dy, height };
+        vertices.insert(vertices.end(), topV, topV + 12);
+
+        // --- Lignes du Wireframe ---
+        // Bas
+        indices.push_back(idx+0); indices.push_back(idx+1);
+        indices.push_back(idx+1); indices.push_back(idx+2);
+        indices.push_back(idx+2); indices.push_back(idx+3);
+        indices.push_back(idx+3); indices.push_back(idx+0);
+        // Haut
+        indices.push_back(idx+4); indices.push_back(idx+5);
+        indices.push_back(idx+5); indices.push_back(idx+6);
+        indices.push_back(idx+6); indices.push_back(idx+7);
+        indices.push_back(idx+7); indices.push_back(idx+4);
+        // Piliers verticaux
+        indices.push_back(idx+0); indices.push_back(idx+4);
+        indices.push_back(idx+1); indices.push_back(idx+5);
+        indices.push_back(idx+2); indices.push_back(idx+6);
+        indices.push_back(idx+3); indices.push_back(idx+7);
+
+        idx += 8;
+    }
+
+    Mesh m;
+    m.count = (GLsizei)indices.size();
+    glGenVertexArrays(1, &m.vao);
+    glGenBuffers(1, &m.vbo);
+    glGenBuffers(1, &m.ebo);
+
+    glBindVertexArray(m.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size()*sizeof(float), vertices.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size()*sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (void*)0);
+    glBindVertexArray(0);
+    return m;
+}
+
 
 Mesh createSphere(float radius, int slices, int stacks) {
     Mesh m;
@@ -326,77 +411,5 @@ Mesh createSphere(float radius, int slices, int stacks) {
     return m;
 }
 
-// ========================================================
-//  CRÉATION DE PLUSIEURS MURS EN UN SEUL MESH
-// ========================================================
-Mesh createWallsWireframe(const std::vector<std::array<float,4>>& segments,
-                          float height, float thickness)
-{
-    std::vector<float> vertices;
-    std::vector<GLuint> indices;
-    GLuint idx = 0; 
 
-    float halfT = thickness / 2.0f;
-
-    for (const auto& s : segments)
-    {
-        float x1 = s[0], y1 = s[1];
-        float x2 = s[2], y2 = s[3];
-        float dx = x2 - x1;
-        float dy = y2 - y1;
-        float len = std::sqrt(dx*dx + dy*dy);
-        if (len < 0.001f) continue;
-        float nx = -dy / len;
-        float ny =  dx / len;
-        float ox = nx * halfT;
-        float oy = ny * halfT;
-        float Ax = x1 + ox, Ay = y1 + oy;
-        float Bx = x1 - ox, By = y1 - oy;
-        float Cx = x2 - ox, Cy = y2 - oy;
-        float Dx = x2 + ox, Dy = y2 + oy;
-
-        // --- Sommets (identique à createWalls) ---
-        float baseV[] = { Ax, Ay, 0.0f,  Bx, By, 0.0f,  Cx, Cy, 0.0f,  Dx, Dy, 0.0f };
-        vertices.insert(vertices.end(), baseV, baseV + 12);
-        float topV[] = { Ax, Ay, height, Bx, By, height, Cx, Cy, height, Dx, Dy, height };
-        vertices.insert(vertices.end(), topV, topV + 12);
-
-
-        // 1. Le rectangle du BAS (4 lignes)
-        indices.push_back(idx+0); indices.push_back(idx+1); // A->B
-        indices.push_back(idx+1); indices.push_back(idx+2); // B->C
-        indices.push_back(idx+2); indices.push_back(idx+3); // C->D
-        indices.push_back(idx+3); indices.push_back(idx+0); // D->A
-
-        // 2. Le rectangle du HAUT (4 lignes)
-        indices.push_back(idx+4); indices.push_back(idx+5); // A'->B'
-        indices.push_back(idx+5); indices.push_back(idx+6); // B'->C'
-        indices.push_back(idx+6); indices.push_back(idx+7); // C'->D'
-        indices.push_back(idx+7); indices.push_back(idx+4); // D'->A'
-
-        // 3. Les 4 Piliers VERTICAUX
-        indices.push_back(idx+0); indices.push_back(idx+4); // A->A'
-        indices.push_back(idx+1); indices.push_back(idx+5); // B->B'
-        indices.push_back(idx+2); indices.push_back(idx+6); // C->C'
-        indices.push_back(idx+3); indices.push_back(idx+7); // D->D'
-
-        idx += 8;
-    }
-
-    Mesh m;
-    m.count = (GLsizei)indices.size();
-    glGenVertexArrays(1, &m.vao);
-    glGenBuffers(1, &m.vbo);
-    glGenBuffers(1, &m.ebo);
-
-    glBindVertexArray(m.vao);
-    glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size()*sizeof(float), vertices.data(), GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size()*sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (void*)0);
-    glBindVertexArray(0);
-    return m;
-}
 } // namespace glx

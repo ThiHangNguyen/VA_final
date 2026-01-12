@@ -12,4 +12,5 @@ GLuint createTextureRGBA(int w, int h);
 void   updateTextureRGBA(GLuint tex, const cv::Mat& rgbaFlipped);
 GLuint createTextureFromMat(const cv::Mat& imgRGBorRGBA);
 
+GLuint loadTexture(const std::string& path, bool flip = false);
 } // namespace glx

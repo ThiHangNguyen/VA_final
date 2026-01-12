@@ -1,6 +1,9 @@
 #include "glx/texture.hpp"
 #include <stdexcept>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 
+#include <iostream>
 namespace glx {
 
 /**
@@ -81,4 +84,13 @@ GLuint createTextureFromMat(const cv::Mat& img) {
   return tex;
 }
 
+GLuint loadTexture(const std::string& path, bool flip) {
+    cv::Mat img = cv::imread(path);
+    if (img.empty()) {
+        return 0; // Ou lancez une exception
+    }
+    cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+    if (flip) cv::flip(img, img, 0);
+    return createTextureFromMat(img); // Utilise votre fonction existante
+}
 } // namespace glx

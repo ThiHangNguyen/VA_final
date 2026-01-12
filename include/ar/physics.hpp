@@ -1,31 +1,30 @@
-#pragma once
+#ifndef PHYSICS_HPP
+#define PHYSICS_HPP
+
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp> // Pour glm::mat4
-#include <opencv2/opencv.hpp>           // Pour cv::Mat
+#include <opencv2/opencv.hpp>
 #include <vector>
-#include <array>
+#include "glx/mesh.hpp" // OBLIGATOIRE pour accéder à glx::Wall
 
 namespace ar {
 
-void resolveWallCollision(glm::vec3& pos, glm::vec3& vel, float radius, 
-                          float x1, float y1, float x2, float y2);
-
-void handleCollisions(glm::vec3& ballPos, 
-                      glm::vec3& ballVel, 
-                      float ballRadius,
-                      const std::vector<std::array<float, 4>>& walls,
-                      float wallThickness);
-
-/**
- * @brief Calcule TOUTE la physique : Mouvement, Gravité, Rotation et Collisions.
- */
+// Mise à jour de la signature pour accepter std::vector<glx::Wall>
 void updatePhysics(const cv::Mat& rvec, 
                    float dt,
                    glm::vec3& ballPos, 
                    glm::vec3& ballVel, 
                    glm::mat4& ballRotationMatrix,
                    float ballRadius,
-                   const std::vector<std::array<float, 4>>& walls,
+                   const std::vector<glx::Wall>& walls, 
                    float wallThickness);
 
-} // namespace ar
+// Si handleCollisions est déclaré dans le hpp, mettez-le à jour aussi :
+void handleCollisions(glm::vec3& ballPos, 
+                      glm::vec3& ballVel, 
+                      float ballRadius,
+                      const std::vector<glx::Wall>& walls,
+                      float wallThickness);
+
+}
+
+#endif

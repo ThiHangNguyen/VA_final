@@ -7,6 +7,17 @@
 
 namespace detect {
 
+std::vector<cv::Point3f> getA4ObjectPoints() {
+    const float W = 210.f;
+    const float H = 297.f;
+    return {
+        {-W * 0.5f, -H * 0.5f, 0.0f}, // Top-Left
+        {+W * 0.5f, -H * 0.5f, 0.0f}, // Top-Right
+        {+W * 0.5f, +H * 0.5f, 0.0f}, // Bottom-Right
+        {-W * 0.5f, +H * 0.5f, 0.0f}  // Bottom-Left
+    };
+}
+
 // --- VARIABLES STATIQUES ---
 static std::vector<cv::Point2f> prevCorners;
 static bool hasTracking = false;

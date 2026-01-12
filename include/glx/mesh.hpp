@@ -18,6 +18,10 @@ struct Mesh {
   GLsizei count = 0;///< Nombre de sommets / indices
 };
 
+struct Wall {
+    glm::vec2 start;
+    glm::vec2 end;
+};
 // Regroupe trois Mesh pour les axes x/y/z
 struct Axes { Mesh x, y, z; };
 
@@ -29,10 +33,9 @@ Mesh createCubeWireframe(float size);
 
 // Axes X/Y/Z centrés à l'origine
 Axes createAxes(float L);
-
-// Mur vertical entre (x1,y1) et (x2,y2) avec une certaine hauteur
-Mesh createWall(float x1, float y1, float x2, float y2, float height, float thickness);
-Mesh createWalls(const std::vector<std::array<float,4>>& segments, float height, float thickness);
+// Déclarations des fonctions avec le nouveau type Wall
+std::vector<Wall> createMazeLayout(float thickness);
+Mesh createWalls(const std::vector<Wall>& segments, float height, float thickness);
+Mesh createWallsWireframe(const std::vector<Wall>& segments, float height, float thickness);
 Mesh createSphere(float radius, int slices, int stacks);
-Mesh createWallsWireframe(const std::vector<std::array<float,4>>& segments, float height, float thickness);
 } // namespace glx

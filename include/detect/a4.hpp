@@ -14,6 +14,7 @@
 
 namespace detect {
 
+std::vector<cv::Point3f> getA4ObjectPoints();
 /**
  * @brief Ordonne 4 points dans l’ordre (TL, TR, BR, BL) selon leur position spatiale.
  *
