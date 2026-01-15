@@ -91,7 +91,7 @@ void updatePhysics(const cv::Mat& rvec,
     glm::vec3 gCam(0.f, 0.f, 1.f);
     glm::vec3 gPlane = gCam - glm::dot(gCam, N) * N;
     
-    float ax = glm::dot(gPlane, X);
+    float ax = glm::dot(gPlane, X); 
     float ay = glm::dot(gPlane, Y);
     
     if (std::abs(ax) < 0.05f) ax = 0.0f;
