@@ -269,7 +269,7 @@ void drawWalls(
     const glx::Mesh& wallsWireframe,
     const glm::mat4& P, const glm::mat4& V,
     GLuint solidProgram,
-    GLint solid_uMVP, GLint solid_uColor
+    GLint solid_uMVP, GLint solid_uColor,const glm::vec3& color
 ) {
     glUseProgram(solidProgram);
     
@@ -279,8 +279,7 @@ void drawWalls(
     glUniformMatrix4fv(solid_uMVP, 1, GL_FALSE, glm::value_ptr(MVP_walls));
 
     // --- 1. DESSIN SOLIDE (MARRON) ---
-    glUniform3f(solid_uColor, 0.6f, 0.3f, 0.2f);
-    
+    glUniform3f(solid_uColor, color.x, color.y, color.z);
     // PolygonOffset pour éviter le Z-fighting avec les lignes noires
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(1.0f, 1.0f);

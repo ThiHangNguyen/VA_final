@@ -1,12 +1,12 @@
 #pragma once
 
 #include <opencv2/core.hpp>
-#include <glm/glm.hpp>
 #include <GL/glew.h>
 #include "glx/mesh.hpp"
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
 #include "glx/texture.hpp"
+#include <glm/glm.hpp>
 
 struct ARRenderContext {
     GLuint bgProgram;
@@ -91,7 +91,8 @@ void drawWalls(
     const glx::Mesh& wallsWireframe,
     const glm::mat4& P, const glm::mat4& V,
     GLuint solidProgram,
-    GLint solid_uMVP, GLint solid_uColor
+    GLint solid_uMVP, GLint solid_uColor,
+    const glm::vec3& color 
 ) ;
 void updateVideoBackground(GLuint& bgTex, const cv::Mat& frameBGR);
 void drawBackground(const ARRenderContext& ctx, GLuint bgTex);;

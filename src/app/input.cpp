@@ -105,6 +105,34 @@ bool parseArgs(int argc, char** argv, InputConfig& cfg)
             cfg.difficulty = game::Difficulty::HARD;
             std::cout << "[CONFIG] Difficulté : DIFFICILE\n";
         }
+        // --- DESIGN ---
+        else if (arg == "--design") {
+            if (i + 1 < argc) {
+                int d = std::stoi(argv[++i]);
+                if (d == 1) cfg.designTheme = DesignTheme::DEFAULT;
+                else if (d == 2) cfg.designTheme = DesignTheme::SPACE;
+                else if (d == 3) cfg.designTheme = DesignTheme::DESERT;
+                else std::cerr << "[WARN] Design inconnu (1-3), defaut applique.\n";
+            }
+        }
+
+        // --- SPEED (Vitesse/Gravité) ---
+        else if (arg == "--speed") {
+            if (i + 1 < argc) {
+                std::string val = argv[++i];
+                if (val == "moon") cfg.speedMode = PhysicsMode::MOON;
+                else if (val == "earth") cfg.speedMode = PhysicsMode::EARTH;
+            }
+        }
+
+        // --- BOUNCE (Rebond) ---
+        else if (arg == "--bounce") {
+            if (i + 1 < argc) {
+                std::string val = argv[++i];
+                if (val == "moon") cfg.bounceMode = PhysicsMode::MOON;
+                else if (val == "earth") cfg.bounceMode = PhysicsMode::EARTH;
+            }
+        }
         else {
             std::cerr << "Argument inconnu ou mal placé : " << arg << "\n";
             return false;}

@@ -28,10 +28,11 @@ add_executable(AR_A4_Video
 
   src/app/init.cpp
   src/app/input.cpp 
+
   src/app/menu.cpp
   src/app/setting.cpp
   src/app/ui_utils.cpp
-
+  
   src/ar/calib.cpp
   src/ar/render.cpp
   src/ar/pose.cpp

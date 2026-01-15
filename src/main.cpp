@@ -17,7 +17,7 @@
 
 #include "app/init.hpp"          // Initialisation OpenGL
 #include "app/input.hpp"         // Parsing des arguments d'entrée
-#include "app/game.hpp"
+#include "app/game.hpp"          // Gestion des états de l'application
 
 #include "game/maze.hpp"         // Génération du labyrinthe
 
@@ -29,7 +29,6 @@ int runApp(int argc, char** argv) {
   try {
 
     bool paused = false;
-
     bool lastSpacePressed = false;
     bool lastEscPressed   = false;
 
@@ -57,6 +56,44 @@ int runApp(int argc, char** argv) {
 
     // --- Shaders ---
     ARRenderContext renderCtx = createRenderContext();
+
+    // ==========================================
+    // CONFIG PHYSIQUE & DESIGN
+    // ==========================================
+    
+    // 1. Physique (Speed & Bounce)
+    float gameAccel = 2500.0f; // Valeur EARTH par défaut
+    float gameBounce = 0.5f;   // Valeur EARTH par défaut
+
+    if (cfg.speedMode == PhysicsMode::MOON) {
+        gameAccel = 500.0f; // Gravité faible
+        std::cout << "[PHYSICS] Mode MOON Speed (Lent)\n";
+    }
+    if (cfg.bounceMode == PhysicsMode::MOON) {
+        gameBounce = 0.95f; // Rebond très fort
+        std::cout << "[PHYSICS] Mode MOON Bounce (Elastique)\n";
+    }
+    glm::vec3 wallColor;  // variable pour la couleur du mur 
+
+    if (cfg.designTheme == DesignTheme::DEFAULT) {
+        // Marron bois
+        wallColor = glm::vec3(0.55f, 0.27f, 0.07f); 
+    }
+    else if (cfg.designTheme == DesignTheme::SPACE) {
+        // Bleu Nuit profond
+        wallColor = glm::vec3(0.05f, 0.05f, 0.3f); 
+    }
+    else if (cfg.designTheme == DesignTheme::DESERT) {
+        // Vert Martien (Alien)
+        wallColor = glm::vec3(0.0f, 0.8f, 0.2f); 
+        // OU si tu veux rouge martien : glm::vec3(0.8f, 0.3f, 0.1f);
+    }
+    // 2. Design (Choix du suffixe pour les fichiers)
+    std::string suffix = "_1"; // Défaut
+    if (cfg.designTheme == DesignTheme::SPACE) suffix = "_2";
+    if (cfg.designTheme == DesignTheme::DESERT) suffix = "_3";
+    std::cout << "[DESIGN] Chargement du theme " << suffix << "\n";
+    // ==========================================
 
     // === MURS CADRE A4 (Assemblage "Menuisier") ===
     float WALL_HEIGHT = 40.f;
@@ -102,7 +139,7 @@ int runApp(int argc, char** argv) {
     float endX = -PLAY_W / 2.0f + (cols - 1) * cellW + cellW / 2.0f;
     float endY = -PLAY_H / 2.0f + (rows - 1) * cellH + cellH / 2.0f;
     glm::vec3 targetPos(endX, endY, 0.1f);
-    
+
     // --- Uniforms pour les shaders ---
     GLint bg_uTex         = glGetUniformLocation(renderCtx.bgProgram,   "uTex");
     GLint line_uMVP       = glGetUniformLocation(renderCtx.lineProgram, "uMVP");
@@ -134,31 +171,36 @@ int runApp(int argc, char** argv) {
     GLint sh_uMVP = glGetUniformLocation(shadowProgram, "uMVP");
     GLint sh_uColor = glGetUniformLocation(shadowProgram, "uColor");
 
-    // 3. Charger l'image de la balle
-    cv::Mat ballImg = cv::imread("../data/balle.png"); 
-    if (ballImg.empty()) std::cout << "ERREUR: Image balle introuvable !" << std::endl;
-    else cv::cvtColor(ballImg, ballImg, cv::COLOR_BGR2RGB); // BGR -> RGB
-    GLuint ballTextureID = glx::createTextureFromMat(ballImg);
+    // === CHARGEMENT ASSETS DYNAMIQUE ===
+    // On construit le chemin du dossier : data/design_1, data/design_2, etc.
+    std::string themePath = "../data/design_" + std::to_string((int)cfg.designTheme) + "/";
+    std::cout << "[DESIGN] Chargement depuis : " << themePath << "\n";
 
-    // --- 4. CHARGEMENT DES TEXTURES ADDITIONNELLES ---
-
-    // A. Sol VR (Pelouse)
-    cv::Mat grassImg = cv::imread("../data/sol.png");
-    if(grassImg.empty()) std::cerr << "ERREUR: Pelouse introuvable !" << std::endl;
-    else cv::cvtColor(grassImg, grassImg, cv::COLOR_BGR2RGB);
-    GLuint grassTexID = glx::createTextureFromMat(grassImg);
-
-    // B. Ciel VR (Skybox)
-    cv::Mat skyImg = cv::imread("../data/ciel.jpeg");
-    if(skyImg.empty()) std::cerr << "ERREUR: Ciel introuvable !" << std::endl;
-    else 
-    {
-      cv::cvtColor(skyImg, skyImg, cv::COLOR_BGR2RGB);
-      cv::flip(skyImg, skyImg, 0); 
+    // 1. Balle
+    cv::Mat ballImg = cv::imread(themePath + "balle.png");
+    if(ballImg.empty()) { // Fallback si le dossier n'existe pas encore
+        std::cerr << "WARN: Texture balle introuvable, chargement default.\n";
+        ballImg = cv::imread("../data/design_1/balle.png");
     }
+    if(!ballImg.empty()) cv::cvtColor(ballImg, ballImg, cv::COLOR_BGR2RGB);
+    GLuint ballTextureID = glx::createTextureFromMat(ballImg.empty() ? frameRGBA : ballImg);
 
-    GLuint skyTexID = glx::createTextureFromMat(skyImg);
+    // 2. Sol
+    cv::Mat grassImg = cv::imread(themePath + "sol.png");
+    if(grassImg.empty()) grassImg = cv::imread("../data/design_1/sol.png");
+    if(!grassImg.empty()) cv::cvtColor(grassImg, grassImg, cv::COLOR_BGR2RGB);
+    GLuint grassTexID = glx::createTextureFromMat(grassImg.empty() ? frameRGBA : grassImg);
 
+    // 3. Ciel (Attention extension .jpg dans ta capture)
+    cv::Mat skyImg = cv::imread(themePath + "ciel.jpg");
+    if(skyImg.empty()) skyImg = cv::imread("../data/design_1/ciel.jpg");
+    if(!skyImg.empty()) { 
+        cv::cvtColor(skyImg, skyImg, cv::COLOR_BGR2RGB); 
+        cv::flip(skyImg, skyImg, 0); 
+    }
+    GLuint skyTexID = glx::createTextureFromMat(skyImg.empty() ? frameRGBA : skyImg);
+    // =========================
+    
     // D. Mesh pour le sol en VR (Un simple rectangle)
     glx::Mesh floorMesh = glx::createBackgroundQuad();
     // =========================
@@ -193,6 +235,7 @@ int runApp(int argc, char** argv) {
           return 0;  //  SORTIE PROPRE DE runApp
       }
       lastEscPressed = escPressed;
+      
 
       if (!cap.read(frameBGR) || frameBGR.empty()) break;
 
@@ -226,14 +269,15 @@ int runApp(int argc, char** argv) {
       lastT = nowT;
       if (dt > 0.05f) dt = 0.05f;
 
-      
+      // MODIFICATION ICI : On ajoute "&& !paused" au début
       if (!paused && okDetect && !rvec.empty()) {
-          // Une seule ligne pour tout gérer !
+          // Appel avec les nouveaux paramètres
           ar::updatePhysics(rvec, dt, ballPos, ballVel, ballRotationMatrix, 
-                      ballRadius, mazeWalls, WALL_THICKNESS);
+                      ballRadius, mazeWalls, WALL_THICKNESS,
+                      gameAccel, gameBounce);
       }
 
-      // --- Mise à jour de la texture de fond ---
+      // -- Mise à jour de la texture de fond ---
       updateVideoBackground(bgTex, frameBGR);
 
       // === RENDU OPENGL ===
@@ -263,29 +307,6 @@ int runApp(int argc, char** argv) {
       glDisable(GL_DEPTH_TEST); // Le fond est derrière tout
       glUseProgram(renderCtx.bgProgram);
       glActiveTexture(GL_TEXTURE0);
-      if (paused) {
-          // ==========================
-          // TEST TEXTE ULTRA SIMPLE
-          // ==========================
-          glUseProgram(0);
-          glDisable(GL_DEPTH_TEST);
-          glDisable(GL_TEXTURE_2D);
-          glBindTexture(GL_TEXTURE_2D, 0);
-
-          // Projection 2D basique
-          glMatrixMode(GL_PROJECTION);
-          glLoadIdentity();
-          glOrtho(0, 800, 0, 600, -1, 1);
-
-          glMatrixMode(GL_MODELVIEW);
-          glLoadIdentity();
-
-          // TEXTE ROUGE EN BAS GAUCHE
-          glColor3f(1.f, 0.f, 0.f);
-          drawText(50, 100, 30, "TEST");
-
-      }
-
 
       if (!isVR) {
           // === MODE AR : On dessine la webcam ===
@@ -317,8 +338,7 @@ int runApp(int argc, char** argv) {
 
 
      // === MURS === (+ contours)
-      drawWalls(wallsMesh, wallsWireframe, P, V, renderCtx.solidProgram, solid_uMVP, solid_uColor);
-
+      drawWalls(wallsMesh, wallsWireframe, P, V, renderCtx.solidProgram, solid_uMVP, solid_uColor, wallColor);
       // === BALLE ===      
       // --- Rendu de l'Ombre ---
       drawBallShadow(renderCtx.ball, P, V, ballPos, ballRotationMatrix, lightPos, 
@@ -333,6 +353,11 @@ int runApp(int argc, char** argv) {
               ph_uMVP, ph_uModel, ph_uViewPos, ph_uLightPos, ph_uLightColor, ph_uTex);
       // === AXES ===
       drawCoordinateAxes(renderCtx, P, V, line_uMVP, line_uColor, line_uViewport, line_uThickness, fbw, fbh, THICKNESS_PX);
+      
+      if (paused) {
+          drawText(10.0f, 30.0f, 1.0f, "PAUSED");
+      }
+
       glfwSwapBuffers(window);
     }
 

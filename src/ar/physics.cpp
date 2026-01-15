@@ -76,67 +76,68 @@ void updatePhysics(const cv::Mat& rvec,
                    glm::mat4& ballRotationMatrix,
                    float ballRadius,
                    const std::vector<glx::Wall>& walls, 
-                   float wallThickness)
+                   float wallThickness,
+                   float paramAccel,       //  Paramètre Vitesse/Gravité
+                   float paramRestitution  //  Paramètre Rebond
+                   )
 {
-    // A. Orientation & Gravité
+    // 1. Gravité & Orientation
     cv::Mat Rcv;
     cv::Rodrigues(rvec, Rcv);
-    
     glm::vec3 X(Rcv.at<double>(0,0), Rcv.at<double>(1,0), Rcv.at<double>(2,0));
     glm::vec3 Y(Rcv.at<double>(0,1), Rcv.at<double>(1,1), Rcv.at<double>(2,1));
     glm::vec3 N(Rcv.at<double>(0,2), Rcv.at<double>(1,2), Rcv.at<double>(2,2));
-
+    
     X = glm::normalize(X); Y = glm::normalize(Y); N = glm::normalize(N);
-
     glm::vec3 gCam(0.f, 0.f, 1.f);
     glm::vec3 gPlane = gCam - glm::dot(gCam, N) * N;
     
-    float ax = glm::dot(gPlane, X); 
+    float ax = glm::dot(gPlane, X);
     float ay = glm::dot(gPlane, Y);
     
     if (std::abs(ax) < 0.05f) ax = 0.0f;
     if (std::abs(ay) < 0.05f) ay = 0.0f;
 
-    // B. Vitesse & Accélération
-    float accel = 2500.f; 
-    float damping = 0.8f; 
+    // 2. Physique avec PARAMÈTRES
+    ballVel.x += ax * paramAccel * dt; // Utilise paramAccel
+    ballVel.y += ay * paramAccel * dt; 
     
-    ballVel.x += ax * accel * dt; 
-    ballVel.y += ay * accel * dt; 
-    ballVel *= (1.0f - damping * dt);
+    // Friction (Damping)
+    float damping = 0.98f; 
+    ballVel *= (1.0f - (1.0f - damping) * 60.0f * dt);
 
     float maxSpeed = 2500.0f;
-    if (glm::length(ballVel) > maxSpeed) {
-        ballVel = glm::normalize(ballVel) * maxSpeed;
-    }
+    if (glm::length(ballVel) > maxSpeed) ballVel = glm::normalize(ballVel) * maxSpeed;
 
-    // C. Mouvement
-    glm::vec3 deplacement = ballVel * dt;
-    ballPos += deplacement;
+    // 3. Intégration
+    glm::vec3 step = ballVel * dt;
+    ballPos += step;
 
-    // D. Rotation Visuelle
-    float dist = glm::length(deplacement);
-    if (dist > 0.0001f) {
-        glm::vec3 axis = glm::cross(deplacement, glm::vec3(0,0,1));
-        if (glm::length(axis) > 0.0001f) {
-            axis = glm::normalize(axis);
-            float angle = dist / ballRadius; 
-            ballRotationMatrix = glm::rotate(glm::mat4(1.0f), angle, axis) * ballRotationMatrix;
+    // 4. Rotation visuelle
+    float distMoved = glm::length(step);
+    if (distMoved > 0.001f) {
+        glm::vec3 axis = glm::cross(step, glm::vec3(0,0,1));
+        if (glm::length(axis) > 0.001f) {
+            float angle = distMoved / ballRadius;
+            ballRotationMatrix = glm::rotate(glm::mat4(1.0f), angle, glm::normalize(axis)) * ballRotationMatrix;
         }
     }
 
-    // E. Collisions (Utilise maintenant la version Wall)
+    // 5. Collisions Murs & Bords avec REBOND
     handleCollisions(ballPos, ballVel, ballRadius, walls, wallThickness);
     
-    // F. Filet de sécurité
-    float limitX = 105.0f - (wallThickness * 0.5f) - ballRadius;
-    float limitY = 148.5f - (wallThickness * 0.5f) - ballRadius;
+    // Bords A4
+    float limitX = 105.0f - (wallThickness/2) - ballRadius;
+    float limitY = 148.5f - (wallThickness/2) - ballRadius;
+    
+    // Facteur de rebond (négatif pour inverser la direction)
+    float bounce = -paramRestitution;
 
-    if (ballPos.x >  limitX) { ballPos.x =  limitX; ballVel.x *= -0.4f; }
-    if (ballPos.x < -limitX) { ballPos.x = -limitX; ballVel.x *= -0.4f; }
-    if (ballPos.y >  limitY) { ballPos.y =  limitY; ballVel.y *= -0.4f; }
-    if (ballPos.y < -limitY) { ballPos.y = -limitY; ballVel.y *= -0.4f; }
-
+    if (ballPos.x > limitX)  { ballPos.x = limitX;  ballVel.x *= bounce; }
+    if (ballPos.x < -limitX) { ballPos.x = -limitX; ballVel.x *= bounce; }
+    if (ballPos.y > limitY)  { ballPos.y = limitY;  ballVel.y *= bounce; }
+    if (ballPos.y < -limitY) { ballPos.y = -limitY; ballVel.y *= bounce; }
+    
     ballPos.z = ballRadius;
 }
 
