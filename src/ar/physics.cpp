@@ -76,7 +76,9 @@ void updatePhysics(const cv::Mat& rvec,
                    glm::mat4& ballRotationMatrix,
                    float ballRadius,
                    const std::vector<glx::Wall>& walls, 
-                   float wallThickness)
+                   float wallThickness,
+                   const glm::vec3& targetPos,
+                   float targetRadius)
 {
     // A. Orientation & Gravité
     cv::Mat Rcv;
@@ -137,7 +139,21 @@ void updatePhysics(const cv::Mat& rvec,
     if (ballPos.y >  limitY) { ballPos.y =  limitY; ballVel.y *= -0.4f; }
     if (ballPos.y < -limitY) { ballPos.y = -limitY; ballVel.y *= -0.4f; }
 
-    ballPos.z = ballRadius;
+    ballPos.z = ballRadius; // La balle roule sur le sol (z=rayon)
+
+    // --- 7. TEST DE VICTOIRE ---
+    // Distance au carré pour éviter la racine carrée (optimisation)
+    float dx = ballPos.x - targetPos.x;
+    float dy = ballPos.y - targetPos.y;
+    float distSq = dx*dx + dy*dy;
+    
+    // Si on est assez proche (rayon balle + rayon trou)
+    float minDist = (ballRadius + targetRadius); 
+    if (distSq < (minDist * minDist)) {
+        return true; // GAGNÉ !
+    }
+
+    return false;
 }
 
 } // namespace ar

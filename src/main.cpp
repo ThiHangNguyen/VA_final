@@ -18,6 +18,8 @@
 #include "app/init.hpp"          // Initialisation OpenGL
 #include "app/input.hpp"         // Parsing des arguments d'entrée
 
+#include "game/maze.hpp"         // Génération du labyrinthe
+
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -53,7 +55,7 @@ int main(int argc, char** argv) {
     float WALL_HEIGHT = 40.f;
     float WALL_THICKNESS = 10.0f; 
 
-    auto mazeWalls = glx::createMazeLayout(WALL_THICKNESS);
+    auto mazeWalls = glx::createMazeLayout(WALL_THICKNESS, cfg.difficulty);
     glx::Mesh wallsMesh = glx::createWalls(mazeWalls, WALL_HEIGHT, WALL_THICKNESS);
     glx::Mesh wallsWireframe = glx::createWallsWireframe(mazeWalls, WALL_HEIGHT, WALL_THICKNESS);
 
@@ -67,11 +69,33 @@ int main(int argc, char** argv) {
     // =========================
     // BALLE (état logique)
     // =========================
-    glm::vec3 ballPos(0.f, 0.f, 8.f);   // Position initiale
     glm::vec3 ballVel(0.f);             // Vitesse
     float ballRadius = 8.f; 
 
+    // 2. Récupération des infos de la grille pour le placement
+    auto dims = game::MazeGenerator::getDimensions(cfg.difficulty);
+    int cols = dims.first;
+    int rows = dims.second;
 
+    // Dimensions physiques de la zone de jeu
+    const float PLAY_W = 190.0f; 
+    const float PLAY_H = 270.0f;
+
+    float cellW = PLAY_W / cols;
+    float cellH = PLAY_H / rows;
+
+    // 3. Calcul du point de DÉPART (Bas Gauche)
+    float startX = -PLAY_W / 2.0f + cellW / 2.0f;
+    float startY = -PLAY_H / 2.0f + cellH / 2.0f;
+
+    // 4. Initialisation de la balle (Maintenant ballRadius existe !)
+    glm::vec3 ballPos(startX, startY, ballRadius); 
+    
+    // 5. Calcul du point d'ARRIVÉE (Haut Droite) pour plus tard
+    float endX = -PLAY_W / 2.0f + (cols - 1) * cellW + cellW / 2.0f;
+    float endY = -PLAY_H / 2.0f + (rows - 1) * cellH + cellH / 2.0f;
+    glm::vec3 targetPos(endX, endY, 0.1f);
+    
     // --- Uniforms pour les shaders ---
     GLint bg_uTex         = glGetUniformLocation(renderCtx.bgProgram,   "uTex");
     GLint line_uMVP       = glGetUniformLocation(renderCtx.lineProgram, "uMVP");

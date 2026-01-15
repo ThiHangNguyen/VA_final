@@ -4,6 +4,7 @@
 #include <array>        // OBLIGATOIRE pour std::array
 #include <glm/glm.hpp>  // OBLIGATOIRE pour glm::vec3
 
+namespace game { enum class Difficulty; }
 /**
  * @file mesh.hpp
  * @brief Petites fonctions utilitaires pour créer des géométries simples (quad, cube, axes).
@@ -34,7 +35,7 @@ Mesh createCubeWireframe(float size);
 // Axes X/Y/Z centrés à l'origine
 Axes createAxes(float L);
 // Déclarations des fonctions avec le nouveau type Wall
-std::vector<Wall> createMazeLayout(float thickness);
+std::vector<Wall> createMazeLayout(float thickness, game::Difficulty difficulty);
 Mesh createWalls(const std::vector<Wall>& segments, float height, float thickness);
 Mesh createWallsWireframe(const std::vector<Wall>& segments, float height, float thickness);
 Mesh createSphere(float radius, int slices, int stacks);

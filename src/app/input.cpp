@@ -61,38 +61,54 @@ bool openVideoSource(cv::VideoCapture& cap, const InputConfig& cfg)
 
 bool parseArgs(int argc, char** argv, InputConfig& cfg)
 {
-    if (argc <= 1) return true; // valeurs par défaut
+    // Valeurs par défaut déjà définies dans le struct InputConfig 
+    // (difficulty = EASY, videoPath = default, etc.)
+    if (argc <= 1) return true; 
 
-    std::string mode = argv[1];
+    // On parcourt tous les arguments un par un
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
 
-    if (mode == "--webcam") {
-        cfg.useWebcam = true;
-        cfg.calibPath = "../data/camera_webcam.yaml";
-        return true;
-    }
-
-    if (mode == "--phone") {
-        if (argc < 3) {
-            std::cerr << "Usage: --phone <url_droidcam>\n";
-            return false;
+        // --- CHOIX DE LA SOURCE ---
+        if (arg == "--webcam") {
+            cfg.useWebcam = true;
+            cfg.calibPath = "../data/camera_webcam.yaml";
         }
-        cfg.usePhone = true;
-        cfg.phoneUrl = argv[2];
-        return true;
-    }
-
-    if (mode == "--video") {
-        if (argc < 4) {
-            std::cerr << "Usage: --video <video_path> <calibration_path>\n";
-            return false;
+        else if (arg == "--phone") {
+            if (i + 1 < argc) {
+                cfg.usePhone = true;
+                cfg.phoneUrl = argv[++i]; // On consomme l'argument suivant (l'URL)
+            } else {
+                std::cerr << "Usage: --phone <url_droidcam>\n";
+                return false;
+            }
         }
-        cfg.videoPath = argv[2];
-        cfg.calibPath = argv[3];
-        return true;
+        else if (arg == "--video") {
+            if (i + 2 < argc) {
+                cfg.videoPath = argv[++i]; // On prend le path
+                cfg.calibPath = argv[++i]; // On prend le calib
+            } else {
+                std::cerr << "Usage: --video <video_path> <calibration_path>\n";
+                return false;
+            }
+        }
+        // --- CHOIX DE LA DIFFICULTÉ ---
+        else if (arg == "--ez") {
+            cfg.difficulty = game::Difficulty::EASY;
+            std::cout << "[CONFIG] Difficulté : FACILE\n";
+        }
+        else if (arg == "--med") {
+            cfg.difficulty = game::Difficulty::MEDIUM;
+            std::cout << "[CONFIG] Difficulté : MOYEN\n";
+        }
+        else if (arg == "--hard") {
+            cfg.difficulty = game::Difficulty::HARD;
+            std::cout << "[CONFIG] Difficulté : DIFFICILE\n";
+        }
+        else {
+            std::cerr << "Argument inconnu ou mal placé : " << arg << "\n";
+            return false;}
     }
 
-    std::cerr << "Argument inconnu: " << mode << "\n";
-    return false;
+    return true;
 }
-
-

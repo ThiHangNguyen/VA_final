@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>  // OBLIGATOIRE pour glm::vec3
 #include <cmath> // Pour sqrt
 #include <opencv2/imgproc.hpp>
+#include "game/maze.hpp"
 namespace glx {
 
 /**
@@ -109,22 +110,13 @@ Axes createAxes(float L) {
 
   return A;
 }
-std::vector<Wall> createMazeLayout(float thickness) {
-    std::vector<Wall> maze;
-    float hT = thickness / 2.0f;
-    
-    // Cadre extérieur A4
-    maze.push_back({{-105.f, -(148.5f + hT)}, {-105.f, +(148.5f + hT)}}); // Gauche
-    maze.push_back({{+105.f, -(148.5f + hT)}, {+105.f, +(148.5f + hT)}}); // Droite
-    maze.push_back({{-(105.f - hT), 148.5f}, {+(105.f - hT), 148.5f}});   // Haut
-    maze.push_back({{-(105.f - hT), -148.5f}, {+(105.f - hT), -148.5f}}); // Bas
-
-    // Ajoutez vos murs de jeu ici !
-    maze.push_back({{-105.f, 0.f}, {-30.f, 0.f}}); 
-    
-    return maze;
+// ========================================================
+//  GÉNÉRATION D’UN LABYRINTHE (UTILISE MazeGenerator)
+// ========================================================
+std::vector<Wall> createMazeLayout(float thickness, game::Difficulty difficulty) {
+    // Pass the difficulty parameter to the generator
+    return game::MazeGenerator::generate(difficulty, thickness);
 }
-
 // ========================================================
 //  CRÉATION D’UN MUR SIMPLE (segment 3D + hauteur)
 // ========================================================

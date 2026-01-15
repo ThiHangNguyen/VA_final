@@ -16,7 +16,9 @@ void updatePhysics(const cv::Mat& rvec,
                    glm::mat4& ballRotationMatrix,
                    float ballRadius,
                    const std::vector<glx::Wall>& walls, 
-                   float wallThickness);
+                   float wallThickness,
+                   const glm::vec3& targetPos,
+                   float targetRadius);
 
 // Si handleCollisions est déclaré dans le hpp, mettez-le à jour aussi :
 void handleCollisions(glm::vec3& ballPos, 

@@ -37,6 +37,7 @@ add_executable(AR_A4_Video
   src/glx/mesh.cpp
   src/glx/shaders.cpp
   src/glx/texture.cpp
+  src/game/maze.cpp
 )
 
 target_link_libraries(AR_A4_Video
