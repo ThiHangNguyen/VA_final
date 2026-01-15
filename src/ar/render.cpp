@@ -323,3 +323,21 @@ void updateVideoBackground(GLuint& bgTex, const cv::Mat& frameBGR) {
     // 3. Envoi des données à la carte graphique
     glx::updateTextureRGBA(bgTex, frameRGBA);
 }
+
+void drawBackground(const ARRenderContext& ctx, GLuint bgTex) {
+    glDisable(GL_DEPTH_TEST); 
+    glUseProgram(ctx.bgProgram);
+    
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, bgTex);
+    
+    // On récupère l'emplacement de la texture dans le shader
+    GLint uTex = glGetUniformLocation(ctx.bgProgram, "uTex");
+    glUniform1i(uTex, 0);
+    
+    glBindVertexArray(ctx.bg.vao);
+    glDrawArrays(GL_TRIANGLES, 0, ctx.bg.count);
+    
+    glBindVertexArray(0);
+    glEnable(GL_DEPTH_TEST); 
+}

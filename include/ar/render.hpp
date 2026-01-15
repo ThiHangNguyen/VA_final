@@ -1,6 +1,7 @@
 #pragma once
 
 #include <opencv2/core.hpp>
+#include <glm/glm.hpp>
 #include <GL/glew.h>
 #include "glx/mesh.hpp"
 #include <opencv2/opencv.hpp>
@@ -93,3 +94,4 @@ void drawWalls(
     GLint solid_uMVP, GLint solid_uColor
 ) ;
 void updateVideoBackground(GLuint& bgTex, const cv::Mat& frameBGR);
+void drawBackground(const ARRenderContext& ctx, GLuint bgTex);;

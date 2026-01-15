@@ -17,6 +17,7 @@
 
 #include "app/init.hpp"          // Initialisation OpenGL
 #include "app/input.hpp"         // Parsing des arguments d'entrée
+#include "app/game.hpp"
 
 #include "game/maze.hpp"         // Génération du labyrinthe
 
@@ -24,8 +25,14 @@
 #include <stdexcept>
 #include <vector>
 
-int main(int argc, char** argv) {
+int runApp(int argc, char** argv) {
   try {
+
+    bool paused = false;
+
+    bool lastSpacePressed = false;
+    bool lastEscPressed   = false;
+
     InputConfig cfg;
     if (!parseArgs(argc, argv, cfg)) {
         return -1;
@@ -169,6 +176,24 @@ int main(int argc, char** argv) {
 
     // === BOUCLE PRINCIPALE ===
     while (!glfwWindowShouldClose(window)) {
+
+      // =========================
+      // INPUT CLAVIER (JEU)
+      // =========================
+      bool spacePressed = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+      if (spacePressed && !lastSpacePressed) {
+          paused = !paused;
+          std::cout << (paused ? "Game paused\n" : "Game resumed\n");
+      }
+      lastSpacePressed = spacePressed;
+
+      bool escPressed = glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS;
+      if (escPressed && !lastEscPressed) {
+          std::cout << "Return to menu\n";
+          return 0;  //  SORTIE PROPRE DE runApp
+      }
+      lastEscPressed = escPressed;
+
       if (!cap.read(frameBGR) || frameBGR.empty()) break;
 
       std::vector<cv::Point2f> imagePts;
@@ -201,7 +226,8 @@ int main(int argc, char** argv) {
       lastT = nowT;
       if (dt > 0.05f) dt = 0.05f;
 
-      if (okDetect && !rvec.empty()) {
+      
+      if (!paused && okDetect && !rvec.empty()) {
           // Une seule ligne pour tout gérer !
           ar::updatePhysics(rvec, dt, ballPos, ballVel, ballRotationMatrix, 
                       ballRadius, mazeWalls, WALL_THICKNESS);
@@ -237,6 +263,29 @@ int main(int argc, char** argv) {
       glDisable(GL_DEPTH_TEST); // Le fond est derrière tout
       glUseProgram(renderCtx.bgProgram);
       glActiveTexture(GL_TEXTURE0);
+      if (paused) {
+          // ==========================
+          // TEST TEXTE ULTRA SIMPLE
+          // ==========================
+          glUseProgram(0);
+          glDisable(GL_DEPTH_TEST);
+          glDisable(GL_TEXTURE_2D);
+          glBindTexture(GL_TEXTURE_2D, 0);
+
+          // Projection 2D basique
+          glMatrixMode(GL_PROJECTION);
+          glLoadIdentity();
+          glOrtho(0, 800, 0, 600, -1, 1);
+
+          glMatrixMode(GL_MODELVIEW);
+          glLoadIdentity();
+
+          // TEXTE ROUGE EN BAS GAUCHE
+          glColor3f(1.f, 0.f, 0.f);
+          drawText(50, 100, 30, "TEST");
+
+      }
+
 
       if (!isVR) {
           // === MODE AR : On dessine la webcam ===
@@ -302,3 +351,20 @@ int main(int argc, char** argv) {
     return -1;
   }
 }
+<<<<<<< HEAD
+=======
+
+
+int main(int argc, char** argv) {
+
+    AppConfig config;
+    bool start = showMenuWindow(config);
+    if (!start) {
+        std::cout << "Quit from menu.\n";
+        return 0;
+    }
+
+    // Lancement main AR
+    return runApp(argc, argv);
+}
+>>>>>>> aa85615 (Add menu, settings UI, pause handling)
