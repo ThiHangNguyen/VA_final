@@ -351,8 +351,6 @@ int runApp(int argc, char** argv) {
     return -1;
   }
 }
-<<<<<<< HEAD
-=======
 
 
 int main(int argc, char** argv) {
@@ -367,4 +365,3 @@ int main(int argc, char** argv) {
     // Lancement main AR
     return runApp(argc, argv);
 }
->>>>>>> aa85615 (Add menu, settings UI, pause handling)
