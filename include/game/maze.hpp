@@ -5,6 +5,8 @@
  */
 
 #pragma once
+#include <GL/glew.h>    
+#include <GLFW/glfw3.h>
 #include <vector>
 #include <utility> // Pour std::pair
 #include "glx/mesh.hpp" // Pour glx::Wall
