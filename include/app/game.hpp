@@ -1,5 +1,7 @@
 #pragma once
-
+#include <GL/glew.h>      
+#include <GLFW/glfw3.h>
+#include "game/maze.hpp" 
 #include <string>
 
 // ===============================
@@ -34,6 +36,12 @@ struct AppConfig {
     float wallColor[3]  = {0.6f, 0.6f, 0.6f};
     float floorColor[3] = {0.3f, 0.8f, 0.3f};
     float skyColor[3]   = {0.6f, 0.8f, 1.0f};
+    game::Difficulty difficulty = game::Difficulty::EASY;
+};
+struct GameResult {
+    bool finished = false;
+    double time = 0.0;
+    game::Difficulty difficulty;
 };
 
 // ===============================

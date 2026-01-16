@@ -1,6 +1,6 @@
-#include <opencv2/opencv.hpp>      // OpenCV pour traitement d'image et capture vidéo
-#include <GL/glew.h>               // GLEW pour charger les extensions OpenGL
+#include <GL/glew.h>   
 #include <GLFW/glfw3.h>            // GLFW pour la gestion de la fenêtre et du contexte OpenGL
+#include <opencv2/opencv.hpp>      // OpenCV pour traitement d'image et capture vidéo
 #include <glm/glm.hpp>             // GLM pour les opérations matricielles (maths 3D)
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -24,8 +24,10 @@
 #include <iostream>
 #include <stdexcept>
 #include <vector>
+#include <string>
 
-int runApp(int argc, char** argv) {
+
+GameResult runApp(int argc, char** argv, AppConfig& config) {
   try {
 
     bool paused = false;
@@ -34,10 +36,10 @@ int runApp(int argc, char** argv) {
 
     InputConfig cfg;
     if (!parseArgs(argc, argv, cfg)) {
-        return -1;
+        return GameResult{};
     }
     cv::VideoCapture cap;
-    if (!openVideoSource(cap, cfg)) return -1;
+    if (!openVideoSource(cap, cfg)) return GameResult{};
 
     // --- Chargement calibration ---
     const ar::Calibration calib = ar::loadCalibration(cfg.calibPath);
@@ -45,7 +47,7 @@ int runApp(int argc, char** argv) {
     cv::Mat frameBGR;
     if (!cap.read(frameBGR) || frameBGR.empty()) {
       std::cerr << "Erreur : première frame vide !\n";
-      return -1;
+      return GameResult{};
     }
     int vw = frameBGR.cols, vh = frameBGR.rows;
 
@@ -98,8 +100,11 @@ int runApp(int argc, char** argv) {
     // === MURS CADRE A4 (Assemblage "Menuisier") ===
     float WALL_HEIGHT = 40.f;
     float WALL_THICKNESS = 10.0f; 
+        auto mazeWalls = game::MazeGenerator::generate(
+        config.difficulty,
+        WALL_THICKNESS
+    );
 
-    auto mazeWalls = glx::createMazeLayout(WALL_THICKNESS, cfg.difficulty);
     glx::Mesh wallsMesh = glx::createWalls(mazeWalls, WALL_HEIGHT, WALL_THICKNESS);
     glx::Mesh wallsWireframe = glx::createWallsWireframe(mazeWalls, WALL_HEIGHT, WALL_THICKNESS);
 
@@ -107,7 +112,6 @@ int runApp(int argc, char** argv) {
     cv::Mat frameRGBA;
     cv::cvtColor(frameBGR, frameRGBA, cv::COLOR_BGR2RGBA);
     GLuint bgTex = glx::createTextureRGBA(frameRGBA.cols, frameRGBA.rows);
-
 
     cv::Mat rvec, tvec; // Rotation et translation
     // =========================
@@ -212,13 +216,36 @@ int runApp(int argc, char** argv) {
     glm::vec3 lightPos(0.0f, 0.0f, 200.0f);
 
 
-      // --- GESTION AR / VR ---
-      bool isVR = false;          // Par défaut on est en AR
-      bool lastVPressed = false;  // Pour éviter que ça clignote si on reste appuyé
+    // --- GESTION AR / VR ---
+    bool isVR = false;          // Par défaut on est en AR
+    bool lastVPressed = false;  // Pour éviter que ça clignote si on reste appuyé
 
+    // === GESTION DU SCORE ===
+    double startTime = glfwGetTime();
+    double finalTime = 0.0;
+    bool gameFinished = false;
+    const float WIN_THRESHOLD = 17.0f; // Distance en mm pour gagner (environ une demi-cellule)
     // === BOUCLE PRINCIPALE ===
     while (!glfwWindowShouldClose(window)) {
+      // --- LOGIQUE DE VICTOIRE ---
+        if (!gameFinished && !paused) {
+            // Calcul de la distance entre la balle et la sortie
+            float distToTarget = glm::distance(glm::vec2(ballPos.x, ballPos.y), glm::vec2(targetPos.x, targetPos.y));
+            
+            if (distToTarget < WIN_THRESHOLD) {
+                //gameFinished = true;
+                finalTime = glfwGetTime() - startTime;
+                std::cout << "FINISHED - TIME: " << finalTime << " s" << std::endl;
+                return GameResult{
+                    true,
+                    finalTime,
+                    config.difficulty
+                };
+            }
+        }
 
+      // Temps à afficher
+      double currentTime = gameFinished ? finalTime : (glfwGetTime() - startTime);
       // =========================
       // INPUT CLAVIER (JEU)
       // =========================
@@ -232,7 +259,11 @@ int runApp(int argc, char** argv) {
       bool escPressed = glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS;
       if (escPressed && !lastEscPressed) {
           std::cout << "Return to menu\n";
-          return 0;  //  SORTIE PROPRE DE runApp
+          return GameResult{
+                    false,   // finished
+                    0.0,
+                    config.difficulty
+                }; //  SORTIE PROPRE DE runApp
       }
       lastEscPressed = escPressed;
       
@@ -284,7 +315,7 @@ int runApp(int argc, char** argv) {
       glfwPollEvents();
 
       // --- Gestion Touche 'V' (Toggle AR/VR) ---
-      bool currentVPressed = (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS);
+      bool currentVPressed = !(glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS);
       if (currentVPressed && !lastVPressed) {
           isVR = !isVR; // On inverse le mode (AR -> VR ou VR -> AR)
           std::cout << "Mode change: " << (isVR ? "VR" : "AR") << std::endl;
@@ -326,7 +357,6 @@ int runApp(int argc, char** argv) {
       // On nettoie le depth buffer pour dessiner la 3D par dessus le fond
       glClear(GL_DEPTH_BUFFER_BIT); 
       glEnable(GL_DEPTH_TEST);
-      
       // ==========================================
       // B. SOL PELOUSE (Uniquement en VR)
       // ==========================================
@@ -369,24 +399,95 @@ int runApp(int argc, char** argv) {
     // --- Nettoyage OpenGL ---
     glx::cleanup(renderCtx.bgProgram, renderCtx.lineProgram, renderCtx.solidProgram, phongProgram, shadowProgram, bgTex, ballTextureID, renderCtx.bg, wallsMesh, renderCtx.ball, renderCtx.axes, window);
 
-    return 0;
+    return GameResult{
+                false,   // finished
+                0.0,
+                config.difficulty
+            };
     
   } catch (const std::exception& e) {
     std::cerr << "Fatal: " << e.what() << std::endl;
-    return -1;
+    return GameResult{};
   }
 }
 
+void showScoreWindow(const GameResult& result) {
+
+    GLContext gl = initOpenGL("Score", 600, 400);
+    GLFWwindow* window = gl.window;
+
+    while (!glfwWindowShouldClose(window)) {
+
+        glfwPollEvents();
+
+        int w, h;
+        glfwGetFramebufferSize(window, &w, &h);
+
+        // ===== BACKGROUND =====
+        glViewport(0, 0, w, h);
+        glClearColor(0.08f, 0.08f, 0.08f, 1.f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // ===== MODE 2D =====
+        glUseProgram(0);
+        glDisable(GL_DEPTH_TEST);
+
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(0, w, 0, h, -1, 1);
+
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+
+        // ===== TEXT =====
+        glColor3f(1.f, 1.f, 1.f);
+
+        drawText(80, h - 80, 20, "FINISHED!");
+        drawText(80, h - 130, 16,
+            ("TIME: " + std::to_string(result.time).substr(0,5) + " s").c_str()
+        );
+
+        drawText(80, h - 180, 16,
+            ("DIFFICULTY: " +
+            std::string(result.difficulty == game::Difficulty::EASY   ? "EASY" :
+                        result.difficulty == game::Difficulty::MEDIUM ? "MEDIUM" :
+                                                                        "HARD")).c_str()
+        );
+
+        drawText(80, 60, 14, "Press ESC to quit");
+
+        // ===== EXIT =====
+        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+            break;
+        }
+
+        glfwSwapBuffers(window);
+    }
+
+    glfwDestroyWindow(window);
+}
 
 int main(int argc, char** argv) {
 
-    AppConfig config;
-    bool start = showMenuWindow(config);
-    if (!start) {
-        std::cout << "Quit from menu.\n";
-        return 0;
-    }
+    while (true) {
+        AppConfig config;
 
-    // Lancement main AR
-    return runApp(argc, argv);
+        bool start = showMenuWindow(config);
+        if (!start) {
+            return 0; // quitter le programme
+        }
+
+        GameResult result = runApp(argc, argv, config);
+
+        if (!result.finished) {
+            // retour menu sans score (ESC pendant le jeu)
+            continue;
+        }
+
+        // Ici : jeu terminé
+        std::cout << "FINISHED in " << result.time << " s\n";
+
+        // On retourne simplement au menu
+    }
 }
+

@@ -1,10 +1,11 @@
+#include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <map>
 #include <vector>
 #include <string>
 #include "app/game.hpp"
-
+#include <algorithm> 
 
 // ============================================================
 // MENU
@@ -62,10 +63,18 @@ bool showMenuWindow(AppConfig& config) {
         // ====================================================
 
         // ---- Bouton CONFIG (haut droite) ----
-        float cfgW = 140;
-        float cfgH = 40;
-        float cfgX = w - cfgW - 20;
-        float cfgY = h - cfgH - 20;
+        // Bouton SETTING responsive
+        float cfgW = 0.18f * w;   // 18% largeur fenêtre
+        float cfgH = 0.07f * h;   // 7% hauteur fenêtre
+
+        // Sécurité UX (évite trop petit / trop gros)
+        cfgW = std::clamp(cfgW, 120.0f, 260.0f);
+        cfgH = std::clamp(cfgH, 36.0f, 70.0f);
+
+        float margin = 0.03f * h; // marge proportionnelle
+        float cfgX = w - cfgW - margin;
+        float cfgY = h - cfgH - margin;
+
 
         bool hoverCfg = mx >= cfgX && mx <= cfgX + cfgW &&
                         my >= cfgY && my <= cfgY + cfgH;

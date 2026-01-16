@@ -1,6 +1,7 @@
 #include "app/game.hpp"
 #include <GLFW/glfw3.h>
-
+#include "game/maze.hpp"   
+#include <iostream>
 // ============================================================
 // DRAW SETTINGS PAGE (ONGLETS DYNAMIQUES + TEXTE AUTO-FIT)
 // ============================================================
@@ -133,9 +134,66 @@ void drawSettingPage(
     glColor3f(0.15f, 0.15f, 0.15f);
 
     switch (currentTab) {
-        case SettingTab::LEVEL:
-            drawText(contentX, contentY, contentTextSize, "LEVEL SETTINGS");
-            break;
+        case SettingTab::LEVEL: {
+
+        float bw = 0.22f * w;
+        float bh = 0.08f * h;
+        float spacing = 0.04f * h;
+
+        float startX = 0.1f * w;
+        float startY = 0.6f * h;
+
+        struct LevelBtn {
+            const char* label;
+            game::Difficulty value;
+        };
+
+        LevelBtn buttons[] = {
+            { "EASY",   game::Difficulty::EASY   },
+            { "MEDIUM", game::Difficulty::MEDIUM },
+            { "HARD",   game::Difficulty::HARD   }
+        };
+
+        for (int i = 0; i < 3; ++i) {
+
+            float bx = startX;
+            float by = startY - i * (bh + spacing);
+
+            // ✅ DÉCLARATIONS MANQUANTES
+            bool hover = isInside(mx, my, bx, by, bw, bh);
+            bool active = (config.difficulty == buttons[i].value);
+
+            // 🎨 Couleur selon état
+            if (active)
+                glColor3f(0.25f, 0.65f, 0.25f);   // sélectionné
+            else if (hover)
+                glColor3f(0.55f, 0.75f, 0.55f);   // hover
+            else
+                glColor3f(0.75f, 0.75f, 0.75f);   // normal
+
+            // Bouton
+            glBegin(GL_QUADS);
+            glVertex2f(bx, by);
+            glVertex2f(bx + bw, by);
+            glVertex2f(bx + bw, by + bh);
+            glVertex2f(bx, by + bh);
+            glEnd();
+
+            // Texte centré
+            glColor3f(0.1f, 0.1f, 0.1f);
+            float textSize = computeTextSizeToFit(bw, bh, buttons[i].label);
+            drawCenteredText(bx, by, bw, bh, textSize/2, buttons[i].label);
+
+            // 🖱️ Click → change la difficulté
+            if (hover && click) {
+                config.difficulty = buttons[i].value;
+                std::cout << "[SETTING] Difficulty set to " << buttons[i].label << "\n";
+            }
+        }
+
+        break;
+    }
+
         case SettingTab::SPEED:
             drawText(contentX, contentY, contentTextSize, "SPEED SETTINGS");
             break;

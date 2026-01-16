@@ -1,5 +1,6 @@
 #pragma once
 #include <GL/glew.h>
+#include <GLFW/glfw3.h>
 #include <vector>
 #include <array>        // OBLIGATOIRE pour std::array
 #include <glm/glm.hpp>  // OBLIGATOIRE pour glm::vec3
