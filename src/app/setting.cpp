@@ -86,7 +86,7 @@ void drawSettingPage(
     // ====================================================
     // TAB BAR (ONGLETS ÉGAUX + AUTO-FIT)
     // ====================================================
-    const char* tabLabels[] = { "LEVEL", "SPEED", "BOUNCE", "PHYSIC" };
+    const char* tabLabels[] = { "LEVEL", "SPEED", "BOUNCE", "DESIGN" };
     const int tabCount = 4;
 
     float tabAreaW = 0.88f * w;
@@ -194,14 +194,155 @@ void drawSettingPage(
         break;
     }
 
-        case SettingTab::SPEED:
-            drawText(contentX, contentY, contentTextSize, "SPEED SETTINGS");
+        case SettingTab::SPEED: {
+            float bw = 0.22f * w;
+            float bh = 0.08f * h;
+            float spacing = 0.04f * h;
+            float startX = 0.1f * w;
+            float startY = 0.6f * h;
+
+            struct SpeedBtn {
+                const char* label;
+                PhysicsMode value;
+            };
+
+            SpeedBtn buttons[] = {
+                { "EARTH", PhysicsMode::EARTH },
+                { "MOON",  PhysicsMode::MOON  }
+            };
+
+            for (int i = 0; i < 2; ++i) {
+                float bx = startX;
+                float by = startY - i * (bh + spacing);
+
+                bool hover = isInside(mx, my, bx, by, bw, bh);
+                bool active = (config.speedMode == buttons[i].value);
+
+                if (active)
+                    glColor3f(0.25f, 0.65f, 0.25f);
+                else if (hover)
+                    glColor3f(0.55f, 0.75f, 0.55f);
+                else
+                    glColor3f(0.75f, 0.75f, 0.75f);
+
+                glBegin(GL_QUADS);
+                glVertex2f(bx, by);
+                glVertex2f(bx + bw, by);
+                glVertex2f(bx + bw, by + bh);
+                glVertex2f(bx, by + bh);
+                glEnd();
+
+                glColor3f(0.1f, 0.1f, 0.1f);
+                float textSize = computeTextSizeToFit(bw, bh, buttons[i].label);
+                drawCenteredText(bx, by, bw, bh, textSize/2, buttons[i].label);
+
+                if (hover && click) {
+                    config.speedMode = buttons[i].value;
+                    std::cout << "[SETTING] Speed set to " << buttons[i].label << "\n";
+                }
+            }
             break;
-        case SettingTab::BOUNCE:
-            drawText(contentX, contentY, contentTextSize, "BOUNCE SETTINGS");
+        }
+
+        case SettingTab::BOUNCE: {
+            float bw = 0.22f * w;
+            float bh = 0.08f * h;
+            float spacing = 0.04f * h;
+            float startX = 0.1f * w;
+            float startY = 0.6f * h;
+
+            struct BounceBtn {
+                const char* label;
+                PhysicsMode value;
+            };
+
+            BounceBtn buttons[] = {
+                { "EARTH", PhysicsMode::EARTH },
+                { "MOON",  PhysicsMode::MOON  }
+            };
+
+            for (int i = 0; i < 2; ++i) {
+                float bx = startX;
+                float by = startY - i * (bh + spacing);
+
+                bool hover = isInside(mx, my, bx, by, bw, bh);
+                bool active = (config.bounceMode == buttons[i].value);
+
+                if (active)
+                    glColor3f(0.25f, 0.65f, 0.25f);
+                else if (hover)
+                    glColor3f(0.55f, 0.75f, 0.55f);
+                else
+                    glColor3f(0.75f, 0.75f, 0.75f);
+
+                glBegin(GL_QUADS);
+                glVertex2f(bx, by);
+                glVertex2f(bx + bw, by);
+                glVertex2f(bx + bw, by + bh);
+                glVertex2f(bx, by + bh);
+                glEnd();
+
+                glColor3f(0.1f, 0.1f, 0.1f);
+                float textSize = computeTextSizeToFit(bw, bh, buttons[i].label);
+                drawCenteredText(bx, by, bw, bh, textSize/2, buttons[i].label);
+
+                if (hover && click) {
+                    config.bounceMode = buttons[i].value;
+                    std::cout << "[SETTING] Bounce set to " << buttons[i].label << "\n";
+                }
+            }
             break;
-        case SettingTab::PHYSIC:
-            drawText(contentX, contentY, contentTextSize, "PHYSIC SETTINGS");
+        }
+
+        case SettingTab::DESIGN: {
+            float bw = 0.22f * w;
+            float bh = 0.08f * h;
+            float spacing = 0.04f * h;
+            float startX = 0.1f * w;
+            float startY = 0.6f * h;
+
+            struct DesignBtn {
+                const char* label;
+                DesignTheme value;
+            };
+
+            DesignBtn buttons[] = {
+                { "DEFAULT", DesignTheme::DEFAULT },
+                { "SPACE",   DesignTheme::SPACE   },
+                { "DESERT",  DesignTheme::DESERT  }
+            };
+
+            for (int i = 0; i < 3; ++i) {
+                float bx = startX;
+                float by = startY - i * (bh + spacing);
+
+                bool hover = isInside(mx, my, bx, by, bw, bh);
+                bool active = (config.designTheme == buttons[i].value);
+
+                if (active)
+                    glColor3f(0.25f, 0.65f, 0.25f);
+                else if (hover)
+                    glColor3f(0.55f, 0.75f, 0.55f);
+                else
+                    glColor3f(0.75f, 0.75f, 0.75f);
+
+                glBegin(GL_QUADS);
+                glVertex2f(bx, by);
+                glVertex2f(bx + bw, by);
+                glVertex2f(bx + bw, by + bh);
+                glVertex2f(bx, by + bh);
+                glEnd();
+
+                glColor3f(0.1f, 0.1f, 0.1f);
+                float textSize = computeTextSizeToFit(bw, bh, buttons[i].label);
+                drawCenteredText(bx, by, bw, bh, textSize/2, buttons[i].label);
+
+                if (hover && click) {
+                    config.designTheme = buttons[i].value;
+                    std::cout << "[SETTING] Design set to " << buttons[i].label << "\n";
+                }
+            }
             break;
+        }
     }
 }

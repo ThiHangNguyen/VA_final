@@ -11,7 +11,7 @@
 #include "ar/pose.hpp"            // Projection / View OpenGL à partir de rvec/tvec
 #include "ar/render.hpp"          // Création du contexte de rendu AR
 #include "detect/a4.hpp"          // Détection des coins de la feuille A4
-#include "detect/tracking.hpp"   // Suivi des coins A4 entre les frames
+// #include "detect/tracking.hpp"   // DÉSACTIVÉ - On utilise juste a4.cpp
 #include "glx/mesh.hpp"           // Création des maillages 3D
 #include "glx/shaders.hpp"        // Compilation / linkage des shaders
 #include "glx/texture.hpp"        // Gestion de la texture
@@ -49,6 +49,12 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                     config.difficulty
                 };
         }
+
+        // Appliquer les paramètres du menu aux configs CLI
+        cfg.difficulty = config.difficulty;
+        cfg.speedMode = config.speedMode;
+        cfg.bounceMode = config.bounceMode;
+        cfg.designTheme = config.designTheme;
         cv::VideoCapture cap;
         if (!openVideoSource(cap, cfg)) 
             return GameResult{
@@ -56,10 +62,10 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                 0.0,
                 config.difficulty
             };
-            A4Tracker tracker;
-        cv::Mat prevGray;
-        cv::Mat currGray;
-        bool firstFrame = true;
+        // TRACKING DÉSACTIVÉ - On utilise juste detectA4Corners() directement
+        // A4Tracker tracker;
+        // cv::Mat prevGray;
+        // cv::Mat currGray;
         // --- Chargement calibration ---
         const ar::Calibration calib = ar::loadCalibration(cfg.calibPath);
         // --- Lecture de la première frame ---
@@ -72,8 +78,6 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                 config.difficulty
             };
         }
-        cv::cvtColor(frameBGR, currGray, cv::COLOR_BGR2GRAY);
-
         int vw = frameBGR.cols, vh = frameBGR.rows;
 
         // --- Initialisation GLFW + fenêtre ---
@@ -89,7 +93,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         // ==========================================
         
         // 1. Physique (Speed & Bounce)
-        float gameAccel = 3000.0f; // Valeur EARTH par défaut
+        float gameAccel = 1500.0f; // Valeur EARTH par défaut
         float gameBounce = 0.5f;   // Valeur EARTH par défaut
 
         if (cfg.speedMode == PhysicsMode::MOON) {
@@ -301,90 +305,42 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
 
             if (!cap.read(frameBGR) || frameBGR.empty()) break;
 
+            // Détection A4 simple (sans tracking complexe)
             std::vector<cv::Point2f> imagePts;
+            bool okDetect = detect::detectA4Corners(frameBGR, imagePts);
 
-            bool poseOK = false;
-            cv::Scalar circleColor;
-        std::vector<cv::Point2f> pointsToDraw;
-
-
-        // 1. Tenter le Tracking si initialisé
-        if (tracker.initialized) {
-            processTracking(prevGray, currGray, tracker, objectPts, calib.cameraMatrix, calib.distCoeffs);
-            
-            if (tracker.initialized) {
-                rvec = tracker.rvecFiltered.clone();
-                tvec = tracker.tvecFiltered.clone();
-                pointsToDraw = tracker.currCorners;
-                circleColor = cv::Scalar(0, 0, 255); // ROUGE
-                poseOK = true;
+            if (okDetect) {
+                // Calcul de la pose avec solvePnP
+                cv::solvePnP(objectPts, imagePts, calib.cameraMatrix, calib.distCoeffs,
+                           rvec, tvec, !rvec.empty(), cv::SOLVEPNP_ITERATIVE);
             }
-        }
 
-        // 2. Si pas initialisé OU si le tracking vient de mourir à l'instant
-        if (!tracker.initialized) {
-            std::vector<cv::Point2f> corners;
-            if (detect::detectA4Corners(frameBGR, corners)) {
-                cv::solvePnP(objectPts, corners, calib.cameraMatrix, calib.distCoeffs, rvec, tvec, false);
-                initTracking(tracker, corners, rvec, tvec, cv::boundingRect(corners));
-                
-                pointsToDraw = corners;
-                circleColor = cv::Scalar(255, 0, 0); // BLEU
-                poseOK = true;
-            }
-        }
-
-        // --- DESSIN DES POINTS ---
-        for (const auto& pt : pointsToDraw) {
-            cv::circle(frameBGR, pt, 5, circleColor, -1); // -1 pour remplir le cercle
-        }
-            
-            firstFrame = false;
-
-            //bool okDetect = detect::detectA4Corners(frameBGR, imagePts);
-            /*if (okDetect) {
-                    // Dessiner un cercle rouge pour chaque coin détecté
-                    for (const auto& pt : imagePts) {
-                        cv::circle(frameBGR, pt, 5, cv::Scalar(0, 0, 255), -1); // Rayon 5, Rouge (BGR: 0,0,255), rempli (-1)
-                    }
-                    
-                    // Optionnel : numéroter les points pour vérifier l'ordre (0, 1, 2, 3)
-                    for (size_t i = 0; i < imagePts.size(); i++) {
-                        cv::putText(frameBGR, std::to_string(i), imagePts[i], 
-                                    cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 0), 2);
-                    }
-                }*/
-            if (!paused && poseOK) {
+            if (!paused && okDetect) {
                 ar::updatePhysics(
                     rvec, dt,
                     ballPos, ballVel,
                     ballRotationMatrix,
                     ballRadius,
-                    game::MazeGenerator::generate(cfg.difficulty, 10.f),
-                    10.f,
+                    mazeWalls,  // ✅ Utilise les murs générés au démarrage
+                    WALL_THICKNESS,
                     gameAccel,
                     gameBounce
                 );
             }
-            if (!poseOK) {
+            if (!okDetect) {
                 // AFFICHER LE MESSAGE SI PAS DE DETECTION
                 std::string msg = "Pas de A4 detecte ! Placez la feuille...";
                 int baseline = 0;
                 cv::Size textSize = cv::getTextSize(msg, cv::FONT_HERSHEY_SIMPLEX, 1.0, 2, &baseline);
-                
+
                 // Centrer le texte
                 cv::Point textOrg((frameBGR.cols - textSize.width) / 2, (frameBGR.rows + textSize.height) / 2);
-                
+
                 // Fond noir semi-transparent pour lisibilité
                 cv::rectangle(frameBGR, textOrg + cv::Point(0, baseline), textOrg + cv::Point(textSize.width, -textSize.height), cv::Scalar(0,0,0), -1);
                 // Texte blanc
                 cv::putText(frameBGR, msg, textOrg, cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
-            } /*else {
-                
-                // On utilise les points potentiellement tournés pour que le tracking reste stable
-                cv::solvePnP(objectPts, imagePts, calib.cameraMatrix, calib.distCoeffs,
-                            rvec, tvec, !rvec.empty(), cv::SOLVEPNP_ITERATIVE);
-            }*/
+            }
 
             // -- Mise à jour de la texture de fond ---
             updateVideoBackground(bgTex, frameBGR);
@@ -408,10 +364,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
 
             // --- Calcul des matrices ---
             glm::mat4 P = ar::projectionFromCV(calib.cameraMatrix, (float)fbw, (float)fbh, 0.1f, 2000.0f);
-            glm::mat4 V = ar::viewFromRvecTvec(
-                    tracker.rvecFiltered,
-                    tracker.tvecFiltered
-                );
+            glm::mat4 V = ar::viewFromRvecTvec(rvec, tvec);
 
 
             // Position caméra (extraction de la 4ème colonne de la matrice inverse de vue)
@@ -451,7 +404,8 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
 
 
             // === MURS === (+ contours)
-            //drawWalls(wallsMesh, wallsWireframe, P, V, renderCtx.solidProgram, solid_uMVP, solid_uColor, wallColor);
+            drawWalls(wallsMesh, wallsWireframe, P, V, renderCtx.solidProgram, solid_uMVP, solid_uColor, wallColor);
+
             // === BALLE ===      
             // --- Rendu de l'Ombre ---
             drawBallShadow(renderCtx.ball, P, V, ballPos, ballRotationMatrix, lightPos, 
@@ -464,13 +418,25 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
             drawBall(renderCtx.ball, ballTextureID, P, V, ballPos, ballRotationMatrix, 
                     camPos, lightPos, phongProgram, 
                     ph_uMVP, ph_uModel, ph_uViewPos, ph_uLightPos, ph_uLightColor, ph_uTex);
+            // === CERCLE D'ARRIVÉE (Cible) ===
+            if (!gameFinished) {
+                drawTargetCircle(targetPos, 15.0f, P, V, renderCtx.solidProgram, solid_uMVP, solid_uColor);
+            }
+
             // === AXES ===
             drawCoordinateAxes(renderCtx, P, V, line_uMVP, line_uColor, line_uViewport, line_uThickness, fbw, fbh, THICKNESS_PX);
-            
-            if (paused) {
-                drawText(10.0f, 30.0f, 1.0f, "PAUSED");
+
+            // === AFFICHAGE SCORE (Temps) avec scaling automatique ===
+            float uiScale = getUIScale(fbw, fbh);
+
+            if (!gameFinished) {
+                std::string timeStr = "Time: " + std::to_string((int)currentTime) + "s";
+                drawText(10.0f * uiScale, fbh - 20.0f * uiScale, 2.0f * uiScale, timeStr);
             }
-            prevGray = currGray.clone();
+
+            if (paused) {
+                drawText(10.0f * uiScale, 30.0f * uiScale, 1.0f * uiScale, "PAUSED");
+            }
 
             glfwSwapBuffers(window);
             /*

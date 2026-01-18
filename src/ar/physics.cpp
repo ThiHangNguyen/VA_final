@@ -1,4 +1,5 @@
 #include "ar/physics.hpp"
+#include "ar/filter.hpp"
 #include <cmath>
 #include <algorithm>
 #include <glm/gtc/matrix_transform.hpp>
@@ -94,19 +95,24 @@ void updatePhysics(const cv::Mat& rvec,
     
     float ax = glm::dot(gPlane, X);
     float ay = glm::dot(gPlane, Y);
-    
+
     if (std::abs(ax) < 0.05f) ax = 0.0f;
     if (std::abs(ay) < 0.05f) ay = 0.0f;
 
-    // 2. Physique avec PARAMÈTRES
-    ballVel.x += ax * paramAccel * dt; // Utilise paramAccel
-    ballVel.y += ay * paramAccel * dt; 
+    // ANTI-JITTER : Filtre passe-bas sur l'accélération
+    // Réduit les tremblotements causés par le tracking bruité
+    static LowPassFilter2D accelFilter(0.2f); // alpha=0.2 : bon compromis jitter/latence
+    glm::vec2 accel_filtered = accelFilter.update(glm::vec2(ax, ay));
+
+    // 2. Physique avec PARAMÈTRES et accélération filtrée
+    ballVel.x += accel_filtered.x * paramAccel * dt;
+    ballVel.y += accel_filtered.y * paramAccel * dt; 
     
     // Friction (Damping)
     float damping = 0.98f; 
     ballVel *= (1.0f - (1.0f - damping) * 60.0f * dt);
 
-    float maxSpeed = 2500.0f;
+    float maxSpeed = 1500.0f;
     if (glm::length(ballVel) > maxSpeed) ballVel = glm::normalize(ballVel) * maxSpeed;
 
     // 3. Intégration

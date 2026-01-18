@@ -1,7 +1,8 @@
 #pragma once
-#include <GL/glew.h>      
+#include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#include "game/maze.hpp" 
+#include "game/maze.hpp"
+#include "app/input.hpp"  // Pour PhysicsMode et DesignTheme
 #include <string>
 
 // ===============================
@@ -21,7 +22,7 @@ enum class SettingTab {
     LEVEL,
     SPEED,
     BOUNCE,
-    PHYSIC
+    DESIGN
 };
 
 // ===============================
@@ -36,7 +37,12 @@ struct AppConfig {
     float wallColor[3]  = {0.6f, 0.6f, 0.6f};
     float floorColor[3] = {0.3f, 0.8f, 0.3f};
     float skyColor[3]   = {0.6f, 0.8f, 1.0f};
+
+    // Paramètres gameplay
     game::Difficulty difficulty = game::Difficulty::EASY;
+    PhysicsMode speedMode = PhysicsMode::EARTH;   // Gravité
+    PhysicsMode bounceMode = PhysicsMode::EARTH;  // Restitution
+    DesignTheme designTheme = DesignTheme::DEFAULT; // Thème visuel
 };
 
 enum class EndReason {
@@ -77,6 +83,15 @@ std::string getTypewriterText(
 // ===============================
 // TEXTE (POLICE MAISON)
 // ===============================
+
+/**
+ * @brief Calcule un facteur de scaling UI automatique selon la taille de fenêtre
+ * @param windowWidth Largeur actuelle de la fenêtre
+ * @param windowHeight Hauteur actuelle de la fenêtre
+ * @return Facteur de scale (1.0 = résolution de référence 1920×1080)
+ */
+float getUIScale(int windowWidth, int windowHeight);
+
 float getTextWidth(const std::string& text, float size);
 float getTextHeight(float size);
 

@@ -324,19 +324,82 @@ void updateVideoBackground(GLuint& bgTex, const cv::Mat& frameBGR) {
 }
 
 void drawBackground(const ARRenderContext& ctx, GLuint bgTex) {
-    glDisable(GL_DEPTH_TEST); 
+    glDisable(GL_DEPTH_TEST);
     glUseProgram(ctx.bgProgram);
-    
+
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, bgTex);
-    
+
     // On récupère l'emplacement de la texture dans le shader
     GLint uTex = glGetUniformLocation(ctx.bgProgram, "uTex");
     glUniform1i(uTex, 0);
-    
+
     glBindVertexArray(ctx.bg.vao);
     glDrawArrays(GL_TRIANGLES, 0, ctx.bg.count);
-    
+
     glBindVertexArray(0);
-    glEnable(GL_DEPTH_TEST); 
+    glEnable(GL_DEPTH_TEST);
+}
+
+void drawTargetCircle(
+    const glm::vec3& targetPos,
+    float radius,
+    const glm::mat4& P, const glm::mat4& V,
+    GLuint solidProgram,
+    GLint solid_uMVP, GLint solid_uColor
+) {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glUseProgram(solidProgram);
+
+    // Création d'un cercle (approximation par triangles)
+    const int segments = 32;
+    std::vector<float> vertices;
+
+    // Centre du cercle
+    vertices.push_back(targetPos.x);
+    vertices.push_back(targetPos.y);
+    vertices.push_back(targetPos.z);
+
+    // Points du cercle
+    for (int i = 0; i <= segments; ++i) {
+        float angle = (float)i / (float)segments * 2.0f * 3.14159265f;
+        vertices.push_back(targetPos.x + std::cos(angle) * radius);
+        vertices.push_back(targetPos.y + std::sin(angle) * radius);
+        vertices.push_back(targetPos.z);
+    }
+
+    // Création du VAO/VBO temporaire
+    GLuint vao, vbo;
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
+
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_DYNAMIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+    // Matrice de transformation
+    glm::mat4 MVP = P * V;
+    glUniformMatrix4fv(solid_uMVP, 1, GL_FALSE, glm::value_ptr(MVP));
+
+    // Couleur verte semi-transparente
+    glUniform3f(solid_uColor, 0.0f, 1.0f, 0.0f);
+
+    // Dessin
+    glDrawArrays(GL_TRIANGLE_FAN, 0, segments + 2);
+
+    // Contour du cercle (plus visible)
+    glUniform3f(solid_uColor, 0.0f, 0.8f, 0.0f);
+    glLineWidth(3.0f);
+    glDrawArrays(GL_LINE_LOOP, 1, segments + 1);
+
+    // Nettoyage
+    glBindVertexArray(0);
+    glDeleteBuffers(1, &vbo);
+    glDeleteVertexArrays(1, &vao);
+
+    glDisable(GL_BLEND);
 }

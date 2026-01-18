@@ -41,11 +41,11 @@ bool trackCornersLK(
         tracker.currCorners,
         status,
         err,
-        cv::Size(21, 21),
-        3,
+        cv::Size(15, 15),  // Réduit de 21x21 à 15x15
+        2,                  // Réduit de 3 à 2 niveaux de pyramide
         cv::TermCriteria(
             cv::TermCriteria::COUNT + cv::TermCriteria::EPS,
-            30,
+            20,             // Réduit de 30 à 20 itérations
             0.01
         )
     );
@@ -177,55 +177,65 @@ void processTracking(
     A4Tracker& tracker,
     const std::vector<cv::Point3f>& objectPts,
     const cv::Mat& K,
-    const cv::Mat& dist 
+    const cv::Mat& dist
 ) {
     if (!tracker.initialized) return;
+
+    // ⚡ OPTIMISATION : Ne faire solvePnP complet que toutes les N frames
+    static int poseUpdateCounter = 0;
+    poseUpdateCounter++;
+    const int POSE_UPDATE_INTERVAL = 2; // Mise à jour complète 1 frame sur 2
+    bool shouldUpdateFullPose = (poseUpdateCounter % POSE_UPDATE_INTERVAL == 0);
 
     // 1. Calcul du mouvement
     bool tracked = trackCornersLK(prevGray, currGray, tracker);
 
-    // 2. Sécurité : mouvement brusque (Baisse du seuil à 40px pour plus de stabilité)
+    // 2. Sécurité : mouvement brusque (seuil plus permissif pour mouvements rapides)
     if (tracked) {
         float movement = cv::norm(tracker.currCorners[0] - tracker.prevCorners[0]);
-        if (movement > 40.0) tracked = false; 
+        if (movement > 80.0) tracked = false; // Augmenté de 40 à 80px
     }
 
     bool poseOK = false;
-    if (tracked) {
-        // 3. Calcul de la pose (Seuil d'erreur abaissé à 4.0 pour être très strict)
-        poseOK = updatePose(tracker, objectPts, K, dist, 4.0); 
+    if (tracked && shouldUpdateFullPose) {
+        // 3. Calcul de la pose COMPLET (seuil plus permissif pour éviter les pertes)
+        poseOK = updatePose(tracker, objectPts, K, dist, 8.0); // Augmenté de 4.0 à 8.0
 
         if (poseOK) {
             // --- VÉRIFICATION DE LA STABILITÉ DE L'ANGLE ---
             // Calcul de l'angle actuel
             double currentAngleDeg = cv::norm(tracker.rvec) * (180.0 / CV_PI);
 
-            // On rejette si l'inclinaison est trop forte (> 60° au lieu de 75°)
-            if (currentAngleDeg > 50.0) {
+            // On rejette si l'inclinaison est trop forte
+            if (currentAngleDeg > 70.0) { // Augmenté de 50 à 70°
                 poseOK = false;
             }
 
             // --- COMPARAISON AVEC LA FRAME PRÉCÉDENTE ---
-            // Si l'angle change trop brutalement entre deux images (> 15°), c'est une dérive
+            // Si l'angle change trop brutalement entre deux images, c'est une dérive
             static double lastAngle = 0;
-            if (std::abs(currentAngleDeg - lastAngle) > 8.0) {
+            if (std::abs(currentAngleDeg - lastAngle) > 15.0) { // Augmenté de 8 à 15°
                 poseOK = false;
             }
             lastAngle = currentAngleDeg;
         }
-        
+
         if (poseOK) {
             // Lissage plus fort (alpha plus petit = plus de stabilité, moins de tremblements)
-            smoothPoseEMA(tracker, 0.08); 
+            smoothPoseEMA(tracker, 0.08);
 
             // 4. ANTI-DRIFT : Recalage géométrique sur la feuille
             std::vector<cv::Point2f> projected;
             cv::projectPoints(objectPts, tracker.rvec, tracker.tvec, K, dist, projected);
-            tracker.currCorners = projected; 
+            tracker.currCorners = projected;
 
-            tracker.prevCorners = tracker.currCorners; 
+            tracker.prevCorners = tracker.currCorners;
             tracker.lastROI = computeROI(tracker.currCorners, currGray.size());
         }
+    } else if (tracked && !shouldUpdateFullPose) {
+        // ⚡ Entre les mises à jour complètes : juste utiliser les corners du tracking optique
+        poseOK = true; // On garde la pose précédente (déjà dans tracker.rvecFiltered/tvecFiltered)
+        tracker.prevCorners = tracker.currCorners;
     }
 
     // 5. Redétection si échec (Délai réduit à 3 frames pour réagir vite)

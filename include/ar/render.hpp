@@ -95,4 +95,11 @@ void drawWalls(
     const glm::vec3& color 
 ) ;
 void updateVideoBackground(GLuint& bgTex, const cv::Mat& frameBGR);
-void drawBackground(const ARRenderContext& ctx, GLuint bgTex);;
+void drawBackground(const ARRenderContext& ctx, GLuint bgTex);
+void drawTargetCircle(
+    const glm::vec3& targetPos,
+    float radius,
+    const glm::mat4& P, const glm::mat4& V,
+    GLuint solidProgram,
+    GLint solid_uMVP, GLint solid_uColor
+);

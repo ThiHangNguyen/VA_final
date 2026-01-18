@@ -37,6 +37,7 @@ add_executable(AR_A4_Video
   src/ar/render.cpp
   src/ar/pose.cpp
   src/ar/physics.cpp
+  src/ar/filter.cpp
   src/detect/a4.cpp
   src/detect/tracking.cpp
   src/glx/mesh.cpp
