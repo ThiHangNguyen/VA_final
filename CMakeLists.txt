@@ -4,7 +4,7 @@ project(AR_A4_Video LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui calib3d)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui video calib3d)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLFW REQUIRED glfw3)
 find_package(GLEW REQUIRED)
@@ -28,7 +28,7 @@ add_executable(AR_A4_Video
 
   src/app/init.cpp
   src/app/input.cpp 
-
+  src/app/score.cpp
   src/app/menu.cpp
   src/app/setting.cpp
   src/app/ui_utils.cpp
@@ -38,6 +38,7 @@ add_executable(AR_A4_Video
   src/ar/pose.cpp
   src/ar/physics.cpp
   src/detect/a4.cpp
+  src/detect/tracking.cpp
   src/glx/mesh.cpp
   src/glx/shaders.cpp
   src/glx/texture.cpp

@@ -2,7 +2,8 @@
 #include <map>
 #include <vector>
 #include <GLFW/glfw3.h>
-
+#include <cmath>
+#include <GL/gl.h>
 // ============================================================
 // MINI POLICE BITMAP MAISON
 // ============================================================
@@ -28,7 +29,9 @@ static std::map<char, std::vector<int>> FONT = {
     {'Y',{1,0,0,0,1, 0,1,0,1,0, 0,0,1,0,0, 0,0,1,0,0, 0,0,1,0,0}},
     {'K',{1,0,0,0,1, 1,0,0,1,0, 1,1,1,0,0, 1,0,0,1,0, 1,0,0,0,1}},
     {'M',{1,0,0,0,1, 1,1,0,1,1, 1,0,1,0,1, 1,0,0,0,1, 1,0,0,0,1}},
-    
+    {'Z',{1,1,1,1,1, 0,0,0,1,0, 0,0,1,0,0, 0,1,0,0,0, 1,1,1,1,1}},
+    {'W',{1,0,0,0,1, 1,0,0,0,1, 1,0,1,0,1, 1,0,1,0,1, 0,1,0,1,0}},
+
 
 };
 
@@ -150,4 +153,128 @@ void drawCenteredText(float bx, float by, float bw, float bh, float s, const std
         s,
         txt
     );
+}
+
+void drawLight2D(float cx, float cy, float r,
+                 float cr, float cg, float cb,
+                 float alpha)
+{
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glBegin(GL_TRIANGLE_FAN);
+    glColor4f(cr, cg, cb, alpha);   // centre lumineux
+    glVertex2f(cx, cy);
+
+    glColor4f(cr, cg, cb, 0.0f);    // bord transparent
+    for (int i = 0; i <= 40; ++i) {
+        float a = (float)i / 40.f * 2.f * M_PI;
+        glVertex2f(cx + cos(a) * r, cy + sin(a) * r);
+    }
+    glEnd();
+
+    glDisable(GL_BLEND);
+}
+#include <GL/gl.h>
+#include <cmath>
+
+// Rectangle plein
+void drawRect(float x, float y, float w, float h) {
+    glBegin(GL_QUADS);
+        glVertex2f(x,     y);
+        glVertex2f(x + w, y);
+        glVertex2f(x + w, y + h);
+        glVertex2f(x,     y + h);
+    glEnd();
+}
+
+// Cercle plein (approximation par triangles)
+void drawFilledCircle(float cx, float cy, float r, int segments) {
+    glBegin(GL_TRIANGLE_FAN);
+        glVertex2f(cx, cy); // centre
+        for (int i = 0; i <= segments; ++i) {
+            float a = 2.0f * M_PI * i / segments;
+            glVertex2f(
+                cx + std::cos(a) * r,
+                cy + std::sin(a) * r
+            );
+        }
+    glEnd();
+}
+
+void drawLED(float cx, float cy, float r, float cr, float cg, float cb, float alpha) {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    // Halo
+    glBegin(GL_TRIANGLE_FAN);
+    glColor4f(cr, cg, cb, alpha * 0.5f);
+    glVertex2f(cx, cy);
+    for (int i = 0; i <= 20; i++) {
+        float ang = i * 2.0f * 3.14159f / 20.0f;
+        glVertex2f(cx + cos(ang) * r * 2.5f, cy + sin(ang) * r * 2.5f);
+    }
+    glEnd();
+
+    // Cœur de la LED
+    glBegin(GL_TRIANGLE_FAN);
+    glColor4f(cr, cg, cb, 1.0f);
+    glVertex2f(cx, cy);
+    for (int i = 0; i <= 20; i++) {
+        float ang = i * 2.0f * 3.14159f / 20.0f;
+        glVertex2f(cx + cos(ang) * r, cy + sin(ang) * r);
+    }
+    glEnd();
+    glDisable(GL_BLEND);
+}
+
+void drawBarLED(float cx, float cy, float r, float cr, float cg, float cb, float alpha) {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBegin(GL_TRIANGLE_FAN);
+    glColor4f(cr, cg, cb, alpha * 0.4f);
+    glVertex2f(cx, cy);
+    for (int i = 0; i <= 16; i++) {
+        float a = i * 2.0f * M_PI / 16.0f;
+        glVertex2f(cx + cos(a) * r * 2.2f, cy + sin(a) * r * 2.2f);
+    }
+    glEnd();
+    glBegin(GL_TRIANGLE_FAN);
+    glColor4f(1.0f, 1.0f, 1.0f, alpha);
+    glVertex2f(cx, cy);
+    glColor4f(cr, cg, cb, alpha);
+    for (int i = 0; i <= 16; i++) {
+        float a = i * 2.0f * M_PI / 16.0f;
+        glVertex2f(cx + cos(a) * r, cy + sin(a) * r);
+    }
+    glEnd();
+}
+
+void drawDiscoBall(float cx, float cy, float r, float animTime, bool isLeft, int w, int h) {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+    int numRays = 12;
+    float sweep = sin(animTime * 0.4f) * 0.5f; 
+    float rotation = animTime * (isLeft ? 1.0f : -1.0f);
+
+    // On calcule la diagonale pour être sûr de couvrir tout l'écran agrandi
+    float maxRange = sqrt(w * w + h * h); 
+
+    for (int i = 0; i < numRays; i++) {
+        float angle = rotation + (i * 2.0f * M_PI / numRays) + sweep;
+        
+        glBegin(GL_TRIANGLES);
+        // Gamme de couleurs dynamique (Arc-en-ciel)
+        float r_c = 0.5f + 0.5f * sin(animTime + i);
+        float g_c = 0.5f + 0.5f * sin(animTime + i + 2.0f);
+        float b_c = 0.5f + 0.5f * sin(animTime + i + 4.0f);
+        glColor4f(r_c, g_c, b_c, 0.15f);
+
+        glVertex2f(cx, cy);
+        glVertex2f(cx + cos(angle - 0.18f) * maxRange, cy + sin(angle - 0.18f) * maxRange);
+        glVertex2f(cx + cos(angle + 0.18f) * maxRange, cy + sin(angle + 0.18f) * maxRange);
+        glEnd();
+    }
+    glDisable(GL_BLEND);
 }

@@ -78,6 +78,7 @@ bool parseArgs(int argc, char** argv, InputConfig& cfg)
             if (i + 1 < argc) {
                 cfg.usePhone = true;
                 cfg.phoneUrl = argv[++i]; // On consomme l'argument suivant (l'URL)
+                cfg.calibPath = "../data/camera_ip11.yaml";
             } else {
                 std::cerr << "Usage: --phone <url_droidcam>\n";
                 return false;

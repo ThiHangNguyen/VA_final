@@ -56,5 +56,7 @@ bool detectA4Corners(const cv::Mat& frameBGR,
  * @param pts Points 2D ordonnés (taille 4, en float).
  */
 void drawOrderedCorners(cv::Mat& img, const std::vector<cv::Point2f>& pts);
+bool findBestA4Contour(const cv::Mat& mask, std::vector<cv::Point>& outApprox, int W, int H) ;
+bool finalizeDetection(const std::vector<cv::Point>& approx, const cv::Mat& frame, std::vector<cv::Point2f>& imagePts, std::string method) ;
 
 } // namespace detect

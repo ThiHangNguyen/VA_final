@@ -15,7 +15,7 @@ std::pair<int, int> MazeGenerator::getDimensions(Difficulty diff) {
     switch(diff) {
         case Difficulty::EASY:   return {3, 4}; // Grosses cases, facile
         case Difficulty::MEDIUM: return {5, 7}; // Cases moyennes, moyen
-        case Difficulty::HARD:   return {7, 10}; // Petites cases, difficile
+        case Difficulty::HARD:   return {6, 10}; // Petites cases, difficile
     }
     return {3, 4}; // Par défaut
 }

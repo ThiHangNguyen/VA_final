@@ -38,11 +38,20 @@ struct AppConfig {
     float skyColor[3]   = {0.6f, 0.8f, 1.0f};
     game::Difficulty difficulty = game::Difficulty::EASY;
 };
+
+enum class EndReason {
+    WIN,
+    LOSE,
+    QUIT,
+    ERROR
+};
+
 struct GameResult {
-    bool finished = false;
+    EndReason reason;
     double time = 0.0;
     game::Difficulty difficulty;
 };
+
 
 // ===============================
 // UI — FONCTIONS UTILITAIRES
@@ -78,8 +87,10 @@ void drawCenteredTextInButton(
     float size,
     const std::string& text
 );
+void drawLED(float cx, float cy, float r, float cr, float cg, float cb, float alpha);
+void drawBarLED(float cx, float cy, float r, float cr, float cg, float cb, float alpha);
+void drawDiscoBall(float cx, float cy, float r, float animTime, bool isLeft, int w, int h) ;
 
-// ===============================
 // PAGES UI
 // ===============================
 bool showMenuWindow(AppConfig& config);
@@ -92,3 +103,8 @@ void drawSettingPage(
     bool click
 );
 void drawCenteredText(float bx, float by, float bw, float bh, float s, const std::string& txt) ;
+void drawLight2D(float cx, float cy, float r,
+                 float cr, float cg, float cb,
+                 float alpha);
+void drawRect(float x, float y, float w, float h);
+void drawFilledCircle(float cx, float cy, float r, int segments) ;
