@@ -112,7 +112,7 @@ void updatePhysics(const cv::Mat& rvec,
     float damping = 0.98f; 
     ballVel *= (1.0f - (1.0f - damping) * 60.0f * dt);
 
-    float maxSpeed = 1500.0f;
+    float maxSpeed = 2000.0f;
     if (glm::length(ballVel) > maxSpeed) ballVel = glm::normalize(ballVel) * maxSpeed;
 
     // 3. Intégration

@@ -7,12 +7,45 @@
 #include <iomanip>
 #include <sstream>
 #include <iostream>
+#include <cmath>
+
+// Dessine des particules/étoiles de célébration
+static void drawStars(float cx, float cy, float radius, float time, int count) {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    for (int i = 0; i < count; i++) {
+        float angle = (2.0f * 3.14159f * i / count) + time * 0.5f;
+        float dist = radius * (0.6f + 0.4f * sin(time * 2.0f + i));
+        float px = cx + cos(angle) * dist;
+        float py = cy + sin(angle) * dist;
+        float alpha = 0.5f + 0.5f * sin(time * 3.0f + i * 0.7f);
+        float size = 3.0f + 2.0f * sin(time * 2.5f + i);
+
+        // Étoile dorée
+        glColor4f(1.0f, 0.85f, 0.2f, alpha);
+        glPointSize(size);
+        glBegin(GL_POINTS);
+        glVertex2f(px, py);
+        glEnd();
+    }
+    glDisable(GL_BLEND);
+}
+
+// Convertit la difficulté en texte
+static std::string difficultyToString(game::Difficulty diff) {
+    switch (diff) {
+        case game::Difficulty::EASY:   return "FACILE";
+        case game::Difficulty::MEDIUM: return "MOYEN";
+        case game::Difficulty::HARD:   return "DIFFICILE";
+        default: return "???";
+    }
+}
 
 int showScoreWindow(const GameResult& result) {
-    // Création d'une fenêtre GLFW pour éviter les conflits Qt/OpenCV
     if (!glfwInit()) return 1;
 
-    GLFWwindow* window = glfwCreateWindow(600, 400, "Resultats du Jeu", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(600, 400, "VICTOIRE !", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return 1;
@@ -22,7 +55,9 @@ int showScoreWindow(const GameResult& result) {
     glfwShowWindow(window);
     glfwFocusWindow(window);
 
+    double startTime = glfwGetTime();
     int choice = -1;
+    bool wasClicked = false;
 
     while (!glfwWindowShouldClose(window) && choice == -1) {
         glfwPollEvents();
@@ -36,83 +71,72 @@ int showScoreWindow(const GameResult& result) {
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
 
-        // Fond sombre
-        glClearColor(0.07f, 0.05f, 0.05f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        float animTime = (float)(glfwGetTime() - startTime);
 
-        // Titre "VICTOIRE !"
-        glColor3f(0.0f, 0.84f, 1.0f);
-        drawText(w * 0.27f, h * 0.75f, h * 0.025f, "VICTOIRE");
+        // Fond avec dégradé
+        drawGradientRect(0, 0, w, h, 0.02f, 0.02f, 0.08f, 0.08f, 0.12f, 0.2f);
 
-        // Temps (formaté correctement avec la police bitmap)
-        std::stringstream ss;
-        ss << "TEMPS   " << (int)result.time << "s";
-        std::string timeStr = ss.str();
+        // Particules de célébration
+        drawStars(w * 0.5f, h * 0.7f, w * 0.3f, animTime, 15);
+
+        // === TITRE ===
+        float pulse = 1.0f + 0.05f * sin(animTime * 3.0f);
+        float titleSize = 6.0f * pulse;  // Plus grand
+
+        glColor3f(0.0f, 0.9f, 1.0f);
+        drawCenteredText(0, h * 0.68f, w, h * 0.20f, titleSize, "VICTOIRE");
+
+        // === TEMPS ===
+        std::stringstream ssTime;
+        ssTime << "TEMPS " << (int)result.time << " S";
 
         glColor3f(1.0f, 1.0f, 1.0f);
-        drawText(w * 0.28f, h * 0.55f, h * 0.018f, timeStr);
+        drawCenteredText(0, h * 0.48f, w, h * 0.12f, 3.5f, ssTime.str());
 
-        // Récupération position souris
+        // === DIFFICULTE ===
+        std::string diffStr = "NIVEAU " + difficultyToString(result.difficulty);
+        glColor3f(0.7f, 0.7f, 0.7f);
+        drawCenteredText(0, h * 0.34f, w, h * 0.10f, 2.5f, diffStr);
+
+        // === BOUTONS ===
         double mx, my;
         glfwGetCursorPos(window, &mx, &my);
-        my = h - my; // Inversion Y
+        my = h - my;
 
         bool click = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+        bool clickEvent = click && !wasClicked;
+        wasClicked = click;
 
-        // Bouton RESTART
-        float restartX = w * 0.15f;
-        float restartY = h * 0.20f;
-        float restartW = w * 0.30f;
-        float restartH = h * 0.12f;
+        float btnW = w * 0.30f;
+        float btnH = h * 0.12f;
+        float btnY = h * 0.12f;
+        float gap = w * 0.08f;
 
-        bool hoverRestart = (mx >= restartX && mx <= restartX + restartW &&
-                            my >= restartY && my <= restartY + restartH);
+        // Bouton REJOUER (vert)
+        float restartX = w * 0.5f - btnW - gap * 0.5f;
+        bool hoverRestart = (mx >= restartX && mx <= restartX + btnW &&
+                            my >= btnY && my <= btnY + btnH);
 
-        glColor3f(hoverRestart ? 0.0f : 0.0f, hoverRestart ? 0.9f : 0.78f, hoverRestart ? 0.0f : 0.0f);
-        glBegin(GL_QUADS);
-        glVertex2f(restartX, restartY);
-        glVertex2f(restartX + restartW, restartY);
-        glVertex2f(restartX + restartW, restartY + restartH);
-        glVertex2f(restartX, restartY + restartH);
-        glEnd();
-
+        drawStyledButton(restartX, btnY, btnW, btnH, 0.1f, 0.6f, 0.2f, hoverRestart);
         glColor3f(1.0f, 1.0f, 1.0f);
-        drawCenteredText(restartX, restartY, restartW, restartH, restartH * 0.12f, "RESTART");
+        drawCenteredText(restartX, btnY, btnW, btnH, 2.5f, "REJOUER");
 
-        if (hoverRestart && click) choice = 0;
+        if (hoverRestart && clickEvent) choice = 0;
 
-        // Bouton MENU
-        float menuX = w * 0.55f;
-        float menuY = h * 0.20f;
-        float menuW = w * 0.30f;
-        float menuH = h * 0.12f;
+        // Bouton MENU (rouge)
+        float menuX = w * 0.5f + gap * 0.5f;
+        bool hoverMenu = (mx >= menuX && mx <= menuX + btnW &&
+                         my >= btnY && my <= btnY + btnH);
 
-        bool hoverMenu = (mx >= menuX && mx <= menuX + menuW &&
-                         my >= menuY && my <= menuY + menuH);
-
-        glColor3f(hoverMenu ? 0.9f : 0.78f, hoverMenu ? 0.0f : 0.0f, hoverMenu ? 0.0f : 0.0f);
-        glBegin(GL_QUADS);
-        glVertex2f(menuX, menuY);
-        glVertex2f(menuX + menuW, menuY);
-        glVertex2f(menuX + menuW, menuY + menuH);
-        glVertex2f(menuX, menuY + menuH);
-        glEnd();
-
+        drawStyledButton(menuX, btnY, btnW, btnH, 0.6f, 0.1f, 0.1f, hoverMenu);
         glColor3f(1.0f, 1.0f, 1.0f);
-        drawCenteredText(menuX, menuY, menuW, menuH, menuH * 0.12f, "MENU");
+        drawCenteredText(menuX, btnY, btnW, btnH, 2.5f, "MENU");
 
-        if (hoverMenu && click) choice = 1;
+        if (hoverMenu && clickEvent) choice = 1;
 
         glfwSwapBuffers(window);
-
-        // Petit délai pour éviter les clics multiples
-        if (click) {
-            glfwWaitEventsTimeout(0.2);
-        }
     }
 
     glfwDestroyWindow(window);
-    glfwTerminate();
-
     return choice;
 }

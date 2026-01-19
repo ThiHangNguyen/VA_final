@@ -1,12 +1,22 @@
+/**
+ * @file game.hpp
+ * @brief Structures et fonctions pour le menu et la configuration du jeu.
+ *
+ * Contient les enums d'etat (AppPage, SettingTab), la config du jeu
+ * (AppConfig), et les fonctions de rendu UI (boutons, texte, etc).
+ *
+ * @author Thi Hang NGUYEN & Bichoy DAOUD
+ */
+
 #pragma once
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include "game/maze.hpp"
-#include "app/input.hpp"  // Pour PhysicsMode et DesignTheme
+#include "app/input.hpp"
 #include <string>
 
 // ===============================
-// ÉTATS DE L'APPLICATION
+// ETATS DE L'APPLICATION
 // ===============================
 enum class AppPage {
     MENU,
@@ -122,4 +132,12 @@ void drawLight2D(float cx, float cy, float r,
                  float cr, float cg, float cb,
                  float alpha);
 void drawRect(float x, float y, float w, float h);
-void drawFilledCircle(float cx, float cy, float r, int segments) ;
+void drawFilledCircle(float cx, float cy, float r, int segments);
+
+// Style victoire - degrade et boutons
+void drawGradientRect(float x, float y, float w, float h,
+                      float r1, float g1, float b1,
+                      float r2, float g2, float b2);
+void drawStyledButton(float x, float y, float w, float h,
+                      float r, float g, float b, bool hover);
+void drawAnimatedSignature(float baseX, float baseY, float baseSize, float animTime, int w, int h);

@@ -25,10 +25,24 @@ static void drawBall2D(float cx, float cy, float r) {
 // ============================================================
 bool showMenuWindow(AppConfig& config) {
     if (!glfwInit()) return false;
+
     GLFWwindow* window = glfwCreateWindow(800, 600, "Reality Mix - Menu Bar", nullptr, nullptr);
-    if (!window) return false;
+    if (!window) {
+        glfwTerminate();
+        return false;
+    }
 
     glfwMakeContextCurrent(window);
+
+    // Réinitialiser GLEW pour le nouveau contexte OpenGL
+    glewExperimental = GL_TRUE;
+    if (glewInit() != GLEW_OK) {
+        std::cerr << "Erreur: Impossible d'initialiser GLEW dans le menu\n";
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return false;
+    }
+
     glfwShowWindow(window);
     glfwFocusWindow(window); // Empêche la notification "est prêt"
 
@@ -42,42 +56,33 @@ bool showMenuWindow(AppConfig& config) {
         glOrtho(0, w, 0, h, -1, 1);
         glMatrixMode(GL_MODELVIEW); glLoadIdentity();
 
-        glClearColor(0.05f, 0.05f, 0.08f, 1.f); // Fond sombre de bar
+        // Fond degrade style victoire (sombre en bas, moins sombre en haut)
         glClear(GL_COLOR_BUFFER_BIT);
+        drawGradientRect(0, 0, w, h, 0.02f, 0.02f, 0.06f, 0.08f, 0.10f, 0.18f);
         animTime += 0.016f;
-
-        // À l'intérieur du while (!glfwWindowShouldClose(window))
-        glfwGetFramebufferSize(window, &w, &h); // Récupère la taille RÉELLE actuelle
 
         // Repositionnement dynamique dans les coins
         drawDiscoBall(60.f, h - 60.f, 25.f, animTime, true, w, h);  // Haut-Gauche
-        //drawDiscoBall(w - 60.f, h - 60.f, 25.f, animTime, false, w, h); // Haut-Droite
 
         // Guirlande LED qui s'adapte aussi à la largeur
-        int numLEDs = w / 50; // Une LED tous les 50 pixels
+        int numLEDs = w / 50;
         for (int i = 0; i < numLEDs; i++) {
             float xPos = (w / (float)(numLEDs - 1)) * i;
             float pulse = 0.5f + 0.5f * sin(animTime * 5.0f + i * 0.5f);
             drawBarLED(xPos, h - 15.f, 7.f, 1.0f, 0.2f, 0.2f, pulse);
             drawBarLED(xPos, 15.f, 7.f, 0.2f, 0.2f, 1.0f, pulse);
         }
-        // 3. TEXTE ET BOUTONS
-        glColor3f(1, 1, 1);
+
+        // Titre avec effet pulse
+        float titlePulse = 1.0f + 0.03f * sin(animTime * 3.0f);
         float titleX = 0.0f;
-        float titleY = h * 0.80f;
+        float titleY = h * 0.78f;
         float titleW = w;
         float titleH = h * 0.12f;
+        float titleSize = titleH * 0.085f * titlePulse;
 
-        // taille adaptative (≈ 8–10 % de la box)
-        float titleSize = titleH * 0.085f;
-        drawCenteredText(
-            titleX,
-            titleY,
-            titleW,
-            titleH,
-            titleSize,
-            "WELCOME TO AR MAZE"
-        );
+        glColor3f(0.0f, 0.9f, 1.0f); // Cyan comme victoire
+        drawCenteredText(titleX, titleY, titleW, titleH, titleSize, "AR MAZE");
 
         double mx, my; glfwGetCursorPos(window, &mx, &my); my = h - my;
         bool click = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
@@ -98,94 +103,46 @@ bool showMenuWindow(AppConfig& config) {
             continue;
         }
         // ====================================================
-        // LAYOUT DYNAMIQUE - STYLE SQUID GAME
+        // LAYOUT DYNAMIQUE - STYLE VICTOIRE
         // ====================================================
 
-        // On garde tes variables de taille d'origine
-        float bw = 0.45f * w;
-        float bh = 0.12f * h;
-        float spacing = 0.06f * h;
+        float bw = 0.40f * w;
+        float bh = 0.11f * h;
+        float spacing = 0.05f * h;
 
-        // Calcul des positions pour empiler les 3 boutons au centre
         float cx = (w - bw) * 0.5f;
-        float cy = h * 0.4f;
+        float cy = h * 0.38f;
 
-        // Positionnement vertical (Start en haut, Setting au milieu, Quit en bas)
-        float startY   = cy + bh + spacing; 
+        float startY   = cy + bh + spacing;
         float settingY = cy;
         float quitY    = cy - bh - spacing;
 
-        // Couleurs Squid Game (Rose Magenta)
-        float pinkR = 0.97f, pinkG = 0.11f, pinkB = 0.46f;
-
-        // --- 1. BOUTON START (Triangle) ---
+        // --- 1. BOUTON START (vert) ---
         bool hoverStart = mx >= cx && mx <= cx + bw && my >= startY && my <= startY + bh;
-        glColor3f(hoverStart ? pinkR + 0.1f : pinkR, hoverStart ? pinkG + 0.1f : pinkG, hoverStart ? pinkB + 0.1f : pinkB);
-        glBegin(GL_QUADS);
-        glVertex2f(cx, startY); glVertex2f(cx + bw, startY);
-        glVertex2f(cx + bw, startY + bh); glVertex2f(cx, startY + bh);
-        glEnd();
-        
-        // Forme Triangle
-        glColor3f(1, 1, 1);
-        glLineWidth(2.0f);
-        glBegin(GL_LINE_LOOP);
-        glVertex2f(cx + 20, startY + bh/2 + 10);
-        glVertex2f(cx + 10, startY + bh/2 - 10);
-        glVertex2f(cx + 30, startY + bh/2 - 10);
-        glEnd();
-
-        // On garde EXACTEMENT ta fonction de texte et sa taille bh * 0.09f
-        glColor3f(1.0f, 1.0f, 1.0f); // Texte en blanc pour le contraste
-        drawCenteredText(cx, startY, bw, bh, bh * 0.09f, "START");
+        drawStyledButton(cx, startY, bw, bh, 0.1f, 0.6f, 0.2f, hoverStart);
+        glColor3f(1.0f, 1.0f, 1.0f);
+        drawCenteredText(cx, startY, bw, bh, bh * 0.08f, "START");
 
         if (hoverStart && click) {
             glfwDestroyWindow(window);
-            glfwTerminate();
             return true;
         }
 
-        // --- 2. BOUTON SETTING (Carré) ---
+        // --- 2. BOUTON SETTING (bleu) ---
         bool hoverCfg = mx >= cx && mx <= cx + bw && my >= settingY && my <= settingY + bh;
-        glColor3f(hoverCfg ? pinkR + 0.1f : pinkR, hoverCfg ? pinkG + 0.1f : pinkG, hoverCfg ? pinkB + 0.1f : pinkB);
-        glBegin(GL_QUADS);
-        glVertex2f(cx, settingY); glVertex2f(cx + bw, settingY);
-        glVertex2f(cx + bw, settingY + bh); glVertex2f(cx, settingY + bh);
-        glEnd();
-
-        // Forme Carré
-        glColor3f(1, 1, 1);
-        glBegin(GL_LINE_LOOP);
-        glVertex2f(cx + 12, settingY + bh/2 - 10); glVertex2f(cx + 30, settingY + bh/2 - 10);
-        glVertex2f(cx + 30, settingY + bh/2 + 10); glVertex2f(cx + 12, settingY + bh/2 + 10);
-        glEnd();
-
+        drawStyledButton(cx, settingY, bw, bh, 0.2f, 0.4f, 0.7f, hoverCfg);
         glColor3f(1.0f, 1.0f, 1.0f);
-        drawCenteredText(cx, settingY, bw, bh, bh * 0.09f, "SETTING");
+        drawCenteredText(cx, settingY, bw, bh, bh * 0.08f, "SETTING");
 
         if (hoverCfg && click) {
             inConfig = true;
         }
 
-        // --- 3. BOUTON QUIT (Cercle) ---
+        // --- 3. BOUTON QUIT (rouge) ---
         bool hoverQuit = mx >= cx && mx <= cx + bw && my >= quitY && my <= quitY + bh;
-        glColor3f(hoverQuit ? pinkR + 0.1f : pinkR, hoverQuit ? pinkG + 0.1f : pinkG, hoverQuit ? pinkB + 0.1f : pinkB);
-        glBegin(GL_QUADS);
-        glVertex2f(cx, quitY); glVertex2f(cx + bw, quitY);
-        glVertex2f(cx + bw, quitY + bh); glVertex2f(cx, quitY + bh);
-        glEnd();
-
-        // Forme Cercle
-        glColor3f(1, 1, 1);
-        glBegin(GL_LINE_LOOP);
-        for(int i=0; i<360; i+=30) {
-            float rad = i * 3.14159f / 180.0f;
-            glVertex2f(cx + 21 + cos(rad)*10, quitY + bh/2 + sin(rad)*10);
-        }
-        glEnd();
-
+        drawStyledButton(cx, quitY, bw, bh, 0.6f, 0.1f, 0.1f, hoverQuit);
         glColor3f(1.0f, 1.0f, 1.0f);
-        drawCenteredText(cx, quitY, bw, bh, bh * 0.09f, "QUIT");
+        drawCenteredText(cx, quitY, bw, bh, bh * 0.08f, "QUIT");
 
         if (hoverQuit && click) {
             glfwDestroyWindow(window);
@@ -193,9 +150,14 @@ bool showMenuWindow(AppConfig& config) {
             return false;
         }
 
+        // --- SIGNATURE ANIMEE "by Hang & Bichoy" ---
+        float sigSize = h * 0.012f;
+        drawAnimatedSignature(w - 100.f, 45.f, sigSize, animTime, w, h);
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
     glfwDestroyWindow(window);
+    glfwTerminate(); // Fermeture de la fenêtre par X -> on quitte
     return false;
 }

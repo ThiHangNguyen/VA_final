@@ -4,12 +4,17 @@
 
 /**
  * @file a4.hpp
- * @brief Détection d'une feuille A4 (forme quadrilatère) et ordonnancement des coins.
+ * @brief Detection d'une feuille A4 et ordonnancement des coins.
  *
- * Fournit les fonctions :
- * - pour détecter automatiquement une forme de type A4 dans une image BGR,
- * - pour ordonner les 4 coins détectés (haut-gauche, haut-droit, bas-droit, bas-gauche),
- * - pour dessiner ces coins sur une image avec des labels utiles pour le débogage.
+ * Pipeline de detection:
+ * 1. Conversion en niveaux de gris + flou gaussien
+ * 2. Seuillage Otsu sur ROI centrale (adaptatif a la luminosite)
+ * 3. Morphologie (close + dilate) pour gerer le flou de mouvement
+ * 4. Recherche du plus grand contour quadrilateral
+ * 5. ConvexHull + approxPolyDP pour obtenir 4 coins propres
+ * 6. Tri des coins (TL, BL, BR, TR) par methode geometrique ou tracking
+ *
+ * @author Thi Hang NGUYEN & Bichoy DAOUD
  */
 
 namespace detect {

@@ -34,3 +34,8 @@ build/CMakeFiles/AR_A4_Video.dir/src/glx/shaders.cpp.o.d
 build/CMakeFiles/AR_A4_Video.dir/src/glx/texture.cpp.o
 build/CMakeFiles/AR_A4_Video.dir/src/glx/texture.cpp.o.d
 build/
+
+# Doxygen (fichiers generes)
+html/
+latex/
+Doxyfile

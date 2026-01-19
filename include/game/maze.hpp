@@ -1,7 +1,12 @@
 /**
  * @file maze.hpp
- * @brief Génération procédurale de labyrinthe (DFS) avec niveaux de difficulté.
- * @namespace game
+ * @brief Generation procedurale de labyrinthe (DFS backtracking).
+ *
+ * On genere un labyrinthe "parfait" (un seul chemin entre 2 cases)
+ * avec l'algorithme DFS randomise. La difficulte controle la taille
+ * de la grille (plus c'est dur, plus il y a de cases).
+ *
+ * @author Thi Hang NGUYEN & Bichoy DAOUD
  */
 
 #pragma once

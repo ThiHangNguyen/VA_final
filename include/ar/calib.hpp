@@ -4,7 +4,13 @@
 
 /**
  * @file calib.hpp
- * @brief Chargement et stockage des paramètres intrinsèques de caméra.
+ * @brief Chargement des parametres de calibration camera depuis YAML.
+ *
+ * La calibration contient la matrice intrinseque (fx, fy, cx, cy)
+ * et les coefficients de distorsion. Ces valeurs sont necessaires
+ * pour solvePnP et la projection 3D.
+ *
+ * @author Thi Hang NGUYEN & Bichoy DAOUD
  */
 namespace ar {
 

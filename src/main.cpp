@@ -93,8 +93,8 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         // ==========================================
         
         // 1. Physique (Speed & Bounce)
-        float gameAccel = 1500.0f; // Valeur EARTH par défaut
-        float gameBounce = 0.5f;   // Valeur EARTH par défaut
+        float gameAccel = 2000.0f; // Valeur EARTH par défaut
+        float gameBounce = 0.55f;   // Valeur EARTH par défaut
 
         if (cfg.speedMode == PhysicsMode::MOON) {
             gameAccel = 500.0f; // Gravité faible
@@ -169,7 +169,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         // 4. Initialisation de la balle (Maintenant ballRadius existe !)
         glm::vec3 ballPos(startX, startY, ballRadius); 
         
-        // 5. Calcul du point d'ARRIVÉE (Haut Droite) pour plus tard
+        // 5. Calcul du point d'ARRIVÉE (Bas Droite) pour plus tard
         float endX = -PLAY_W / 2.0f + (cols - 1) * cellW + cellW / 2.0f;
         float endY = -PLAY_H / 2.0f + (rows - 1) * cellH + cellH / 2.0f;
         glm::vec3 targetPos(endX, endY, 0.1f);
@@ -294,11 +294,12 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
             bool escPressed = glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS;
             if (escPressed && !lastEscPressed) {
                 std::cout << "Return to menu\n";
-                return GameResult{
-                            EndReason::QUIT,
-                            0.0,
-                            config.difficulty
-                        };
+                result = GameResult{
+                    EndReason::QUIT,
+                    0.0,
+                    config.difficulty
+                };
+                break; // Sort de la boucle proprement (comme WIN)
             }
             lastEscPressed = escPressed;
             
@@ -313,6 +314,14 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                 // Calcul de la pose avec solvePnP
                 cv::solvePnP(objectPts, imagePts, calib.cameraMatrix, calib.distCoeffs,
                            rvec, tvec, !rvec.empty(), cv::SOLVEPNP_ITERATIVE);
+
+                // // DEBUG: Dessiner les coins détectés avec leurs indices
+                // detect::drawOrderedCorners(frameBGR, imagePts);
+                // for (int i = 0; i < 4; i++) {
+                //     cv::putText(frameBGR, std::to_string(i),
+                //                cv::Point((int)imagePts[i].x + 10, (int)imagePts[i].y - 10),
+                //                cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(255, 255, 255), 2);
+                // }
             }
 
             if (!paused && okDetect) {
@@ -465,10 +474,9 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
 
         // --- Nettoyage OpenGL ---
         glx::cleanup(renderCtx.bgProgram, renderCtx.lineProgram, renderCtx.solidProgram, phongProgram, shadowProgram, bgTex, ballTextureID, renderCtx.bg, wallsMesh, renderCtx.ball, renderCtx.axes, window);
-        glfwHideWindow(window);
         cap.release();
         glfwDestroyWindow(window);
-        glfwTerminate();
+        // NE PAS appeler glfwTerminate() ici - le menu va réutiliser GLFW
         return result;
         
         
@@ -497,11 +505,14 @@ int main(int argc, char** argv) {
             GameResult result = runApp(argc, argv, config);
 
             if (result.reason == EndReason::WIN) {
-                int choice = showScoreWindow(result); 
-                
+                int choice = showScoreWindow(result);
+
                 if (choice == 1) stayInGame = false; // Retour Menu
+                // choice == 0 -> Rejouer, on reste dans la boucle
+            } else if (result.reason == EndReason::QUIT) {
+                stayInGame = false; // Retour au menu principal
             } else {
-                stayInGame = false;
+                stayInGame = false; // Erreur ou autre
             }
         }
     }

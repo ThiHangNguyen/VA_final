@@ -1,11 +1,17 @@
+/**
+ * @file shaders.hpp
+ * @brief Compilation et linkage de shaders GLSL.
+ *
+ * Contient les fonctions pour compiler des shaders et les sources
+ * GLSL en tant que chaines litterales (background, lignes, phong, ombres).
+ *
+ * @author Thi Hang NGUYEN & Bichoy DAOUD
+ */
+
 #pragma once
 #include <GL/glew.h>
 #include <vector>
 
-/**
- * @file shaders.hpp
- * @brief Utilitaires de compilation/édition de programmes GLSL.
- */
 namespace glx {
 
 GLuint compile(GLenum type, const char* src);

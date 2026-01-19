@@ -1,3 +1,9 @@
+/**
+ * @file a4.cpp
+ * @brief Implementation de la detection de feuille A4.
+ * @author Thi Hang NGUYEN & Bichoy DAOUD
+ */
+
 #include "detect/a4.hpp"
 #include <opencv2/imgproc.hpp>
 #include <algorithm>
@@ -7,9 +13,15 @@
 
 namespace detect {
 
+/**
+ * @brief Retourne les coordonnees 3D des coins d'une feuille A4.
+ *
+ * Format A4: 210mm x 297mm, centre a l'origine.
+ * L'ordre correspond a celui de orderFourCornersGeometric: TL, TR, BR, BL
+ */
 std::vector<cv::Point3f> getA4ObjectPoints() {
-    const float W = 210.f;
-    const float H = 297.f;
+    const float W = 210.f;  // Largeur A4 en mm
+    const float H = 297.f;  // Hauteur A4 en mm
     return {
         {-W * 0.5f, -H * 0.5f, 0.0f}, // Top-Left
         {+W * 0.5f, -H * 0.5f, 0.0f}, // Top-Right
@@ -18,21 +30,24 @@ std::vector<cv::Point3f> getA4ObjectPoints() {
     };
 }
 
-// --- VARIABLES STATIQUES ---
-static std::vector<cv::Point2f> prevCorners;
-static bool hasTracking = false;
-// Compteur pour garder l'affichage quelques frames si on perd la détection (anti-clignotement)
-static int lostFramesCount = 0;
-const int MAX_LOST_FRAMES = 5;
+// ===========================================================
+// Variables statiques pour le tracking inter-frames
+// ===========================================================
+static std::vector<cv::Point2f> prevCorners;  ///< Coins de la frame precedente
+static bool hasTracking = false;               ///< True si on a deja detecte au moins une fois
+static int lostFramesCount = 0;                ///< Nb de frames sans detection
+const int MAX_LOST_FRAMES = 3;                 ///< Tolerance avant de perdre le tracking
 
-// Distance au carré
+/// Distance au carre entre 2 points (pour eviter sqrt)
 static double distSq(const cv::Point2f& p1, const cv::Point2f& p2) {
     double dx = p1.x - p2.x;
     double dy = p1.y - p2.y;
     return dx*dx + dy*dy;
 }
 
-// --- TRI GÉOMÉTRIQUE ROBUSTE (Somme/Différence) ---
+// ===========================================================
+// Tri des coins par methode geometrique (somme/difference)
+// ===========================================================
 bool orderFourCornersGeometric(const std::vector<cv::Point>& approx,
                                std::vector<cv::Point2f>& ordered)
 {
@@ -53,6 +68,7 @@ bool orderFourCornersGeometric(const std::vector<cv::Point>& approx,
         if (d > maxDiff) { maxDiff = d; idxBL = i; } // BL
     }
 
+    // Ordre final: TL, BL, BR, TR (sens anti-horaire depuis le haut-gauche)
     ordered[0] = approx[idxTL];
     ordered[1] = approx[idxBL];
     ordered[2] = approx[idxBR];
@@ -60,7 +76,9 @@ bool orderFourCornersGeometric(const std::vector<cv::Point>& approx,
     return true;
 }
 
-// --- TRI PAR TRACKING ---
+// ===========================================================
+// Tri par tracking (associe chaque coin au plus proche de la frame precedente)
+// ===========================================================
 bool orderCornersTracking(const std::vector<cv::Point>& approx,
                           std::vector<cv::Point2f>& ordered)
 {
@@ -88,13 +106,16 @@ bool orderCornersTracking(const std::vector<cv::Point>& approx,
     return true;
 }
 
-// --- DÉTECTION PRINCIPALE ---
+// ===========================================================
+// DETECTION PRINCIPALE
+// ===========================================================
 bool detectA4Corners(const cv::Mat& frameBGR, std::vector<cv::Point2f>& imagePts) {
 
-  const int H = frameBGR.rows;
-  const int W = frameBGR.cols;
+    const int H = frameBGR.rows;
+    const int W = frameBGR.cols;
 
-  // 1. Pré-traitement
+    // ---------------------------------------------------------
+    // ETAPE 1: Pre-traitement (grayscale + flou)
   cv::Mat gray, blurred, thresh;
   cv::cvtColor(frameBGR, gray, cv::COLOR_BGR2GRAY);
 
