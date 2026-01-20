@@ -63,6 +63,12 @@ static std::map<char, std::vector<int>> FONT = {
     {'8',{0,1,1,1,0, 1,0,0,0,1, 0,1,1,1,0, 1,0,0,0,1, 0,1,1,1,0}},
     {'9',{0,1,1,1,0, 1,0,0,0,1, 0,1,1,1,1, 0,0,0,0,1, 0,1,1,1,0}},
     {'-',{0,0,0,0,0, 0,0,0,0,0, 1,1,1,1,1, 0,0,0,0,0, 0,0,0,0,0}},
+    {':',{0,0,0, 0,1,0, 0,0,0, 0,1,0, 0,0,0}},
+    {'.',{0,0,0, 0,0,0, 0,0,0, 0,0,0, 0,1,0}},
+    {'s',{0,1,1,1,0, 1,0,0,0,0, 0,1,1,1,0, 0,0,0,0,1, 1,1,1,1,0}},
+    {'p',{1,1,1,1,0, 1,0,0,0,1, 1,1,1,1,0, 1,0,0,0,0, 1,0,0,0,0}},
+    {'m',{1,0,0,0,1, 1,1,0,1,1, 1,0,1,0,1, 1,0,0,0,1, 1,0,0,0,1}},
+    {'e',{1,1,1,1,1, 1,0,0,0,0, 1,1,1,1,0, 1,0,0,0,0, 1,1,1,1,1}},
 };
 
 
@@ -130,7 +136,7 @@ bool isInside(float x, float y, float bx, float by, float bw, float bh) {
 float getTextWidth(const std::string& text, float size) {
     float w = 0.f;
     for (char c : text) {
-        int cols = (c == 'I') ? 3 : 5;
+        int cols = (c == 'I' || c == ':' || c == '.') ? 3 : 5;
         w += cols * size + size;
     }
     return w - size;
@@ -143,7 +149,7 @@ float getTextHeight(float size) {
 void drawChar(float x, float y, float s, char c) {
     if (!FONT.count(c)) return;
     const auto& g = FONT[c];
-    int cols = (c == 'I') ? 3 : 5;
+    int cols = (c == 'I' || c == ':' || c == '.') ? 3 : 5;
 
     glBegin(GL_QUADS);
     for (int r = 0; r < 5; ++r) {

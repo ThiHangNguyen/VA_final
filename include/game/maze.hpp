@@ -63,6 +63,21 @@ public:
      * @return std::pair<int, int> {colonnes, lignes}.
      */
     static std::pair<int, int> getDimensions(Difficulty diff);
+
+    /**
+     * @brief Vérifie qu'un chemin existe entre le départ et l'arrivée.
+     * Note: L'algorithme DFS garantit toujours un chemin valide (labyrinthe "parfait"),
+     * mais cette fonction permet de le prouver explicitement.
+     * @param grid La grille de cellules générée.
+     * @param cols Nombre de colonnes.
+     * @param rows Nombre de lignes.
+     * @param startX, startY Position de départ (défaut: 0,0 = bas-gauche).
+     * @param endX, endY Position d'arrivée (défaut: cols-1, 0 = bas-droite).
+     * @return true si un chemin existe, false sinon.
+     */
+    static bool validatePath(const std::vector<Cell>& grid, int cols, int rows,
+                            int startX = 0, int startY = 0,
+                            int endX = -1, int endY = 0);
 };
 
 } // namespace game

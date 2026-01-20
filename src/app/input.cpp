@@ -32,10 +32,29 @@ bool openVideoSource(cv::VideoCapture& cap, const InputConfig& cfg)
             cap.set(cv::CAP_PROP_FPS,          reqFPS);
         }
 
+        // Affichage détaillé pour diagnostic
+        int actualW = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
+        int actualH = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
+        double actualFPS = cap.get(cv::CAP_PROP_FPS);
+        int fourcc = (int)cap.get(cv::CAP_PROP_FOURCC);
+        char codec[5] = {
+            (char)(fourcc & 0xFF),
+            (char)((fourcc >> 8) & 0xFF),
+            (char)((fourcc >> 16) & 0xFF),
+            (char)((fourcc >> 24) & 0xFF),
+            '\0'
+        };
+
         std::cout << "[INFO] Webcam ouverte: "
-                  << cap.get(cv::CAP_PROP_FRAME_WIDTH) << "x"
-                  << cap.get(cv::CAP_PROP_FRAME_HEIGHT)
-                  << " @ " << cap.get(cv::CAP_PROP_FPS) << " FPS\n";
+                  << actualW << "x" << actualH
+                  << " @ " << actualFPS << " FPS"
+                  << " [Codec: " << codec << "]\n";
+
+        if (actualFPS < 25) {
+            std::cout << "[WARN] FPS faible ! Ta camera ne supporte peut-etre pas 30 FPS a cette resolution.\n";
+            std::cout << "       Essaie de reduire la resolution ou verifie que MJPEG est supporte.\n";
+        }
+
         return true;
     }
 

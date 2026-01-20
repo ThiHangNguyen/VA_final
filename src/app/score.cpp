@@ -9,6 +9,53 @@
 #include <iostream>
 #include <cmath>
 
+// Dessine des confettis qui tombent
+static void drawConfetti(float w, float h, float time, int count) {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    float colors[][3] = {
+        {1.0f, 0.2f, 0.3f},  // Rouge
+        {0.2f, 0.8f, 0.3f},  // Vert
+        {0.2f, 0.5f, 1.0f},  // Bleu
+        {1.0f, 0.9f, 0.2f},  // Jaune
+        {1.0f, 0.5f, 0.0f},  // Orange
+        {0.8f, 0.2f, 1.0f},  // Violet
+    };
+    int numColors = 6;
+
+    for (int i = 0; i < count; i++) {
+        float seed = (float)i * 1.618f;
+        float x = fmod(seed * 137.5f, w);
+        float fallSpeed = 80.0f + fmod(seed * 50.0f, 60.0f);
+        float y = h - fmod(time * fallSpeed + seed * 100.0f, h + 50.0f);
+        float wobble = sin(time * 3.0f + seed * 2.0f) * 20.0f;
+        x += wobble;
+        float rotation = time * (2.0f + fmod(seed, 3.0f));
+
+        int colorIdx = (int)(seed * 10.0f) % numColors;
+        glColor4f(colors[colorIdx][0], colors[colorIdx][1], colors[colorIdx][2], 0.9f);
+
+        float size = 6.0f + fmod(seed * 3.0f, 4.0f);
+        float halfW = size * 0.5f;
+        float halfH = size * 0.3f;
+
+        glPushMatrix();
+        glTranslatef(x, y, 0.0f);
+        glRotatef(rotation * 57.3f, 0.0f, 0.0f, 1.0f);
+
+        glBegin(GL_QUADS);
+        glVertex2f(-halfW, -halfH);
+        glVertex2f(halfW, -halfH);
+        glVertex2f(halfW, halfH);
+        glVertex2f(-halfW, halfH);
+        glEnd();
+
+        glPopMatrix();
+    }
+    glDisable(GL_BLEND);
+}
+
 // Dessine des particules/étoiles de célébration
 static void drawStars(float cx, float cy, float radius, float time, int count) {
     glEnable(GL_BLEND);
@@ -76,7 +123,10 @@ int showScoreWindow(const GameResult& result) {
         // Fond avec dégradé
         drawGradientRect(0, 0, w, h, 0.02f, 0.02f, 0.08f, 0.08f, 0.12f, 0.2f);
 
-        // Particules de célébration
+        // Confettis qui tombent
+        drawConfetti(w, h, animTime, 50);
+
+        // Particules de célébration (étoiles)
         drawStars(w * 0.5f, h * 0.7f, w * 0.3f, animTime, 15);
 
         // === TITRE ===

@@ -112,25 +112,38 @@ void updatePhysics(const cv::Mat& rvec,
     float damping = 0.98f; 
     ballVel *= (1.0f - (1.0f - damping) * 60.0f * dt);
 
-    float maxSpeed = 2000.0f;
+    float maxSpeed = 800.0f; // Réduit pour éviter le tunneling
     if (glm::length(ballVel) > maxSpeed) ballVel = glm::normalize(ballVel) * maxSpeed;
 
-    // 3. Intégration
-    glm::vec3 step = ballVel * dt;
-    ballPos += step;
+    // 3. Intégration avec SUB-STEPPING (anti-tunneling)
+    // On découpe le mouvement en petits pas pour ne jamais sauter un mur
+    glm::vec3 totalStep = ballVel * dt;
+    float totalDist = glm::length(totalStep);
+
+    // Taille max d'un pas = rayon de la balle (garantit qu'on ne traverse pas un mur)
+    float maxStepSize = ballRadius * 0.5f;
+    int numSteps = std::max(1, (int)std::ceil(totalDist / maxStepSize));
+
+    glm::vec3 stepPerIter = totalStep / (float)numSteps;
+
+    for (int i = 0; i < numSteps; i++) {
+        ballPos += stepPerIter;
+
+        // Collision à chaque sous-pas
+        handleCollisions(ballPos, ballVel, ballRadius, walls, wallThickness);
+    }
 
     // 4. Rotation visuelle
-    float distMoved = glm::length(step);
+    float distMoved = totalDist;
     if (distMoved > 0.001f) {
-        glm::vec3 axis = glm::cross(step, glm::vec3(0,0,1));
+        glm::vec3 axis = glm::cross(totalStep, glm::vec3(0,0,1));
         if (glm::length(axis) > 0.001f) {
             float angle = distMoved / ballRadius;
             ballRotationMatrix = glm::rotate(glm::mat4(1.0f), angle, glm::normalize(axis)) * ballRotationMatrix;
         }
     }
 
-    // 5. Collisions Murs & Bords avec REBOND
-    handleCollisions(ballPos, ballVel, ballRadius, walls, wallThickness);
+    // 5. Collisions Bords A4 (déjà géré dans la boucle pour les murs)
     
     // Bords A4
     float limitX = 105.0f - (wallThickness/2) - ballRadius;

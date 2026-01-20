@@ -10,8 +10,8 @@
 #include "ar/calib.hpp"           // Chargement des paramètres de calibration
 #include "ar/pose.hpp"            // Projection / View OpenGL à partir de rvec/tvec
 #include "ar/render.hpp"          // Création du contexte de rendu AR
+#include "ar/filter.hpp"          // Filtrage EMA pour anti-jitter
 #include "detect/a4.hpp"          // Détection des coins de la feuille A4
-// #include "detect/tracking.hpp"   // DÉSACTIVÉ - On utilise juste a4.cpp
 #include "glx/mesh.hpp"           // Création des maillages 3D
 #include "glx/shaders.hpp"        // Compilation / linkage des shaders
 #include "glx/texture.hpp"        // Gestion de la texture
@@ -41,6 +41,17 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         bool lastSpacePressed = false;
         bool lastEscPressed   = false;
 
+        // Toggles affichage (F = FPS, T = Temps)
+        bool showFPS = false;
+        bool showTime = true; // Temps affiché par défaut
+        bool lastFPressed = false;
+        bool lastTPressed = false;
+
+        // Pour calcul FPS
+        double fpsTimer = 0.0;
+        int frameCount = 0;
+        float currentFPS = 0.0f;
+
         InputConfig cfg;
         if (!parseArgs(argc, argv, cfg)) {
             return GameResult{
@@ -62,10 +73,11 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                 0.0,
                 config.difficulty
             };
-        // TRACKING DÉSACTIVÉ - On utilise juste detectA4Corners() directement
-        // A4Tracker tracker;
-        // cv::Mat prevGray;
-        // cv::Mat currGray;
+        // Filtrage EMA pour stabiliser la pose (anti-jitter)
+        // Alpha = 0.4 : réactif mais lisse
+        ar::LowPassFilter3D rvecFilter(0.4f);
+        ar::LowPassFilter3D tvecFilter(0.4f);
+
         // --- Chargement calibration ---
         const ar::Calibration calib = ar::loadCalibration(cfg.calibPath);
         // --- Lecture de la première frame ---
@@ -302,7 +314,29 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                 break; // Sort de la boucle proprement (comme WIN)
             }
             lastEscPressed = escPressed;
-            
+
+            // Toggle FPS (touche F)
+            bool fPressed = glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS;
+            if (fPressed && !lastFPressed) {
+                showFPS = !showFPS;
+            }
+            lastFPressed = fPressed;
+
+            // Toggle Temps (touche T)
+            bool tPressed = glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS;
+            if (tPressed && !lastTPressed) {
+                showTime = !showTime;
+            }
+            lastTPressed = tPressed;
+
+            // Calcul FPS
+            frameCount++;
+            fpsTimer += dt;
+            if (fpsTimer >= 0.5) { // Mise à jour toutes les 0.5s
+                currentFPS = frameCount / fpsTimer;
+                frameCount = 0;
+                fpsTimer = 0.0;
+            }
 
             if (!cap.read(frameBGR) || frameBGR.empty()) break;
 
@@ -315,13 +349,20 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                 cv::solvePnP(objectPts, imagePts, calib.cameraMatrix, calib.distCoeffs,
                            rvec, tvec, !rvec.empty(), cv::SOLVEPNP_ITERATIVE);
 
-                // // DEBUG: Dessiner les coins détectés avec leurs indices
-                // detect::drawOrderedCorners(frameBGR, imagePts);
-                // for (int i = 0; i < 4; i++) {
-                //     cv::putText(frameBGR, std::to_string(i),
-                //                cv::Point((int)imagePts[i].x + 10, (int)imagePts[i].y - 10),
-                //                cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(255, 255, 255), 2);
-                // }
+                // Appliquer filtrage EMA pour lisser la pose
+                glm::vec3 rvecGlm(rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
+                glm::vec3 tvecGlm(tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
+
+                glm::vec3 rvecSmooth = rvecFilter.update(rvecGlm);
+                glm::vec3 tvecSmooth = tvecFilter.update(tvecGlm);
+
+                // Appliquer les valeurs filtrées
+                rvec.at<double>(0) = rvecSmooth.x;
+                rvec.at<double>(1) = rvecSmooth.y;
+                rvec.at<double>(2) = rvecSmooth.z;
+                tvec.at<double>(0) = tvecSmooth.x;
+                tvec.at<double>(1) = tvecSmooth.y;
+                tvec.at<double>(2) = tvecSmooth.z;
             }
 
             if (!paused && okDetect) {
@@ -330,7 +371,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                     ballPos, ballVel,
                     ballRotationMatrix,
                     ballRadius,
-                    mazeWalls,  // ✅ Utilise les murs générés au démarrage
+                    mazeWalls,
                     WALL_THICKNESS,
                     gameAccel,
                     gameBounce
@@ -349,6 +390,50 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                 cv::rectangle(frameBGR, textOrg + cv::Point(0, baseline), textOrg + cv::Point(textSize.width, -textSize.height), cv::Scalar(0,0,0), -1);
                 // Texte blanc
                 cv::putText(frameBGR, msg, textOrg, cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
+            }
+
+            // === AFFICHAGE HUD (sur la frame vidéo) ===
+
+            // Filigrane PAUSE
+            if (paused) {
+                std::string pauseMsg = "PAUSE";
+                int baseline = 0;
+                double scale = 3.0;
+                int thickness = 5;
+                cv::Size textSize = cv::getTextSize(pauseMsg, cv::FONT_HERSHEY_SIMPLEX, scale, thickness, &baseline);
+                cv::Point center((frameBGR.cols - textSize.width) / 2, (frameBGR.rows + textSize.height) / 2);
+
+                // Ombre
+                cv::putText(frameBGR, pauseMsg, center + cv::Point(3, 3), cv::FONT_HERSHEY_SIMPLEX, scale, cv::Scalar(0, 0, 0), thickness + 2);
+                // Texte principal (jaune)
+                cv::putText(frameBGR, pauseMsg, center, cv::FONT_HERSHEY_SIMPLEX, scale, cv::Scalar(0, 255, 255), thickness);
+
+                // Sous-titre
+                std::string subMsg = "Appuyez sur ESPACE pour continuer";
+                cv::Size subSize = cv::getTextSize(subMsg, cv::FONT_HERSHEY_SIMPLEX, 0.7, 2, &baseline);
+                cv::Point subCenter((frameBGR.cols - subSize.width) / 2, center.y + 50);
+                cv::putText(frameBGR, subMsg, subCenter, cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(255, 255, 255), 2);
+            }
+
+            // Affichage FPS (coin haut gauche)
+            if (showFPS) {
+                char fpsText[32];
+                snprintf(fpsText, sizeof(fpsText), "FPS: %.1f", currentFPS);
+                cv::putText(frameBGR, fpsText, cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 0), 2);
+            }
+
+            // Affichage Temps (coin haut droit)
+            if (showTime && !gameFinished) {
+                int mins = (int)currentTime / 60;
+                int secs = (int)currentTime % 60;
+                int ms = (int)((currentTime - (int)currentTime) * 100);
+                char timeText[32];
+                snprintf(timeText, sizeof(timeText), "%02d:%02d.%02d", mins, secs, ms);
+
+                int baseline = 0;
+                cv::Size textSize = cv::getTextSize(timeText, cv::FONT_HERSHEY_SIMPLEX, 0.8, 2, &baseline);
+                cv::Point pos(frameBGR.cols - textSize.width - 10, 30);
+                cv::putText(frameBGR, timeText, pos, cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 0), 2);
             }
 
             // -- Mise à jour de la texture de fond ---

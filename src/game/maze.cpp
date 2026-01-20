@@ -1,5 +1,6 @@
 #include "game/maze.hpp"
 #include <stack>
+#include <queue>
 #include <algorithm>
 #include <random>
 #include <iostream>
@@ -141,6 +142,55 @@ std::vector<glx::Wall> MazeGenerator::generate(Difficulty diff, float wallThickn
     }
 
     return walls;
+}
+
+bool MazeGenerator::validatePath(const std::vector<Cell>& grid, int cols, int rows,
+                                  int startX, int startY, int endX, int endY) {
+    // Valeurs par défaut pour endX
+    if (endX < 0) endX = cols - 1;
+
+    // BFS pour trouver un chemin
+    std::vector<bool> visited(cols * rows, false);
+    std::queue<std::pair<int, int>> queue;
+
+    queue.push({startX, startY});
+    visited[startY * cols + startX] = true;
+
+    while (!queue.empty()) {
+        auto [x, y] = queue.front();
+        queue.pop();
+
+        // Arrivée atteinte
+        if (x == endX && y == endY) {
+            return true;
+        }
+
+        const Cell& c = grid[y * cols + x];
+
+        // Vérifier les 4 directions (si pas de mur)
+        // Droite
+        if (!c.right && x < cols - 1 && !visited[y * cols + (x + 1)]) {
+            visited[y * cols + (x + 1)] = true;
+            queue.push({x + 1, y});
+        }
+        // Gauche
+        if (!c.left && x > 0 && !visited[y * cols + (x - 1)]) {
+            visited[y * cols + (x - 1)] = true;
+            queue.push({x - 1, y});
+        }
+        // Haut
+        if (!c.top && y < rows - 1 && !visited[(y + 1) * cols + x]) {
+            visited[(y + 1) * cols + x] = true;
+            queue.push({x, y + 1});
+        }
+        // Bas
+        if (!c.bottom && y > 0 && !visited[(y - 1) * cols + x]) {
+            visited[(y - 1) * cols + x] = true;
+            queue.push({x, y - 1});
+        }
+    }
+
+    return false; // Pas de chemin trouvé
 }
 
 } // namespace game
