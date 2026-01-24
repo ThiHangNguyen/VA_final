@@ -62,6 +62,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         bool firstFrame = true;
         // --- Chargement calibration ---
         const ar::Calibration calib = ar::loadCalibration(cfg.calibPath);
+
         // --- Lecture de la première frame ---
         cv::Mat frameBGR;
         if (!cap.read(frameBGR) || frameBGR.empty()) {
@@ -76,7 +77,6 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         GLContext gl = initOpenGL("Maze game", vw, vh);
         GLFWwindow* window = gl.window;
 
-
         // --- Shaders ---
         ARRenderContext renderCtx = createRenderContext();
 
@@ -86,46 +86,38 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         
         // 1. Physique (Speed & Bounce)
         float gameAccel = 3000.0f; // Valeur EARTH par défaut
-        float gameBounce = 0.5f;   // Valeur EARTH par défaut
+        float gameBounce = 1.5f;   // Valeur EARTH par défaut
 
         if (cfg.speedMode == PhysicsMode::MOON) {
-            gameAccel = 500.0f; // Gravité faible
+            gameAccel = 1000.0f; // Gravité faible
             std::cout << "[PHYSICS] Mode MOON Speed (Lent)\n";
         }
         if (cfg.bounceMode == PhysicsMode::MOON) {
-            gameBounce = 0.95f; // Rebond très fort
+            gameBounce = 2.0f; // Rebond très fort
             std::cout << "[PHYSICS] Mode MOON Bounce (Elastique)\n";
         }
-        glm::vec3 wallColor;  // variable pour la couleur du mur 
+
+        glm::vec3 wallColor;  
 
         if (cfg.designTheme == DesignTheme::DEFAULT) {
-            // Marron bois
             wallColor = glm::vec3(0.55f, 0.27f, 0.07f); 
         }
         else if (cfg.designTheme == DesignTheme::SPACE) {
-            // Bleu Nuit profond
             wallColor = glm::vec3(0.05f, 0.05f, 0.3f); 
         }
         else if (cfg.designTheme == DesignTheme::DESERT) {
-            // Vert Martien (Alien)
             wallColor = glm::vec3(0.0f, 0.8f, 0.2f); 
-            // OU si tu veux rouge martien : glm::vec3(0.8f, 0.3f, 0.1f);
         }
         // 2. Design (Choix du suffixe pour les fichiers)
         std::string suffix = "_1"; // Défaut
         if (cfg.designTheme == DesignTheme::SPACE) suffix = "_2";
         if (cfg.designTheme == DesignTheme::DESERT) suffix = "_3";
         std::cout << "[DESIGN] Chargement du theme " << suffix << "\n";
-        // ==========================================
 
         // === MURS CADRE A4 (Assemblage "Menuisier") ===
-        float WALL_HEIGHT = 40.f;
+        float WALL_HEIGHT = 30.f;
         float WALL_THICKNESS = 10.0f; 
-            auto mazeWalls = game::MazeGenerator::generate(
-            config.difficulty,
-            WALL_THICKNESS
-        );
-
+        auto mazeWalls = game::MazeGenerator::generate(config.difficulty,WALL_THICKNESS);
         glx::Mesh wallsMesh = glx::createWalls(mazeWalls, WALL_HEIGHT, WALL_THICKNESS);
         glx::Mesh wallsWireframe = glx::createWallsWireframe(mazeWalls, WALL_HEIGHT, WALL_THICKNESS);
 
@@ -269,7 +261,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
             double nowT = glfwGetTime();
             float dt = float(nowT - lastT);
             lastT = nowT;
-            if (dt > 0.05f) dt = 0.05f;
+            //if (dt > 0.05f) dt = 0.05f;
 
             // Temps à afficher
             double currentTime = gameFinished ? finalTime : (glfwGetTime() - startTime);
@@ -337,13 +329,13 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
             
             firstFrame = false;
             if (!paused && poseOK) {
-                ar::updatePhysics(
+                 ar::updatePhysics(
                     rvec, dt,
                     ballPos, ballVel,
                     ballRotationMatrix,
                     ballRadius,
-                    game::MazeGenerator::generate(cfg.difficulty, 10.f),
-                    10.f,
+                    mazeWalls,
+                    WALL_THICKNESS,
                     gameAccel,
                     gameBounce
                 );
@@ -441,7 +433,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                     camPos, lightPos, phongProgram, 
                     ph_uMVP, ph_uModel, ph_uViewPos, ph_uLightPos, ph_uLightColor, ph_uTex);
             // === AXES ===
-            drawCoordinateAxes(renderCtx, P, V, line_uMVP, line_uColor, line_uViewport, line_uThickness, fbw, fbh, THICKNESS_PX);
+            //drawCoordinateAxes(renderCtx, P, V, line_uMVP, line_uColor, line_uViewport, line_uThickness, fbw, fbh, THICKNESS_PX);
             
             if (paused) {
                 drawText(10.0f, 30.0f, 1.0f, "PAUSED");
@@ -468,12 +460,10 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                 }*/
         }
 
-        // --- Nettoyage des ressources ---
         glDeleteTextures(1, &grassTexID);
         glDeleteTextures(1, &skyTexID);
         glDeleteVertexArrays(1, &floorMesh.vao); glDeleteBuffers(1, &floorMesh.vbo);
 
-        // --- Nettoyage OpenGL ---
         glx::cleanup(renderCtx.bgProgram, renderCtx.lineProgram, renderCtx.solidProgram, phongProgram, shadowProgram, bgTex, ballTextureID, renderCtx.bg, wallsMesh, renderCtx.ball, renderCtx.axes, window);
         glfwHideWindow(window);
         cap.release();
