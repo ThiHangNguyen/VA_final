@@ -66,11 +66,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         cv::Mat frameBGR;
         if (!cap.read(frameBGR) || frameBGR.empty()) {
         std::cerr << "Erreur : première frame vide !\n";
-            return GameResult{
-                EndReason::ERROR,
-                0.0,
-                config.difficulty
-            };
+            return GameResult{EndReason::ERROR, 0.0, config.difficulty};
         }
         cv::cvtColor(frameBGR, currGray, cv::COLOR_BGR2GRAY);
 
@@ -340,20 +336,6 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         }
             
             firstFrame = false;
-
-            //bool okDetect = detect::detectA4Corners(frameBGR, imagePts);
-            /*if (okDetect) {
-                    // Dessiner un cercle rouge pour chaque coin détecté
-                    for (const auto& pt : imagePts) {
-                        cv::circle(frameBGR, pt, 5, cv::Scalar(0, 0, 255), -1); // Rayon 5, Rouge (BGR: 0,0,255), rempli (-1)
-                    }
-                    
-                    // Optionnel : numéroter les points pour vérifier l'ordre (0, 1, 2, 3)
-                    for (size_t i = 0; i < imagePts.size(); i++) {
-                        cv::putText(frameBGR, std::to_string(i), imagePts[i], 
-                                    cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 0), 2);
-                    }
-                }*/
             if (!paused && poseOK) {
                 ar::updatePhysics(
                     rvec, dt,
@@ -379,16 +361,10 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                 cv::rectangle(frameBGR, textOrg + cv::Point(0, baseline), textOrg + cv::Point(textSize.width, -textSize.height), cv::Scalar(0,0,0), -1);
                 // Texte blanc
                 cv::putText(frameBGR, msg, textOrg, cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
-            } /*else {
-                
-                // On utilise les points potentiellement tournés pour que le tracking reste stable
-                cv::solvePnP(objectPts, imagePts, calib.cameraMatrix, calib.distCoeffs,
-                            rvec, tvec, !rvec.empty(), cv::SOLVEPNP_ITERATIVE);
-            }*/
+            } 
 
             // -- Mise à jour de la texture de fond ---
             updateVideoBackground(bgTex, frameBGR);
-
 
             // === RENDU OPENGL ===
             glfwPollEvents();
@@ -451,7 +427,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
 
 
             // === MURS === (+ contours)
-            //drawWalls(wallsMesh, wallsWireframe, P, V, renderCtx.solidProgram, solid_uMVP, solid_uColor, wallColor);
+            drawWalls(wallsMesh, wallsWireframe, P, V, renderCtx.solidProgram, solid_uMVP, solid_uColor, wallColor);
             // === BALLE ===      
             // --- Rendu de l'Ombre ---
             drawBallShadow(renderCtx.ball, P, V, ballPos, ballRotationMatrix, lightPos, 
