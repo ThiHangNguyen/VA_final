@@ -22,7 +22,7 @@
  * ```
  *
  * @author Thi Hang NGUYEN & Bichoy DAOUD
- * @date 2024
+ * @date 2026
  */
 
 #include <GL/glew.h>

@@ -1,3 +1,24 @@
+/**
+ * @file texture.cpp
+ * @brief Gestion des textures OpenGL à partir d’images OpenCV.
+ *
+ * Ce fichier fournit des fonctions utilitaires pour :
+ * - créer des textures OpenGL RGBA vides (ex: fond vidéo)
+ * - mettre à jour dynamiquement une texture à partir d’un cv::Mat
+ * - créer une texture OpenGL depuis une image OpenCV (1, 3 ou 4 canaux)
+ * - charger une texture depuis un fichier image (PNG, JPG, etc.)
+ *
+ * Les conversions de formats (BGR → RGB, flip vertical) sont gérées
+ * afin d’assurer la compatibilité entre OpenCV et OpenGL.
+ *
+ * Ces fonctions sont utilisées pour :
+ * - le fond vidéo en réalité augmentée
+ * - les textures des objets 3D (balle, sol, ciel, etc.)
+ *
+ * @author Thi Hang NGUYEN
+ * @author Bichoy DAOUD
+ */
+
 #include "glx/texture.hpp"
 #include <stdexcept>
 #include <opencv2/imgcodecs.hpp>

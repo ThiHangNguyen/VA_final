@@ -1,3 +1,13 @@
+/**
+ * @file game.cpp
+ * @brief Gestion du menu principal et de l’interface utilisateur du jeu.
+ *
+ * Ce fichier implémente le menu principal du jeu (START / SETTINGS / QUIT),
+ * ainsi que les animations visuelles associées (fond animé, LED, texte, boutons).
+ * Il repose sur OpenGL en mode immédiat pour un rendu simple et réactif.
+ *
+ * @author Thi Hang NGUYEN & Bichoy DAOUD
+ */
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
@@ -23,6 +33,23 @@ static void drawBall2D(float cx, float cy, float r) {
 // ============================================================
 // MENU
 // ============================================================
+
+
+
+/**
+ * @brief Affiche la fenêtre du menu principal du jeu.
+ *
+ * Cette fonction :
+ *  - initialise GLFW et GLEW,
+ *  - crée une fenêtre OpenGL dédiée au menu,
+ *  - gère l’interaction utilisateur (souris),
+ *  - affiche les boutons START / SETTING / QUIT,
+ *  - appelle la page de configuration si nécessaire.
+ *
+ * @param config Structure de configuration du jeu (modifiée par les SETTINGS)
+ * @return true si l’utilisateur lance le jeu (START)
+ * @return false si l’utilisateur quitte l’application
+ */
 bool showMenuWindow(AppConfig& config) {
     if (!glfwInit()) return false;
 

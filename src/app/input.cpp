@@ -1,27 +1,63 @@
+/**
+ * @file input.cpp
+ * @brief Gestion des sources vidéo et du parsing des arguments utilisateur.
+ *
+ * Ce fichier centralise :
+ * - l'ouverture de la source vidéo (webcam, téléphone, fichier)
+ * - le parsing des arguments de la ligne de commande
+ *
+ * Il permet de configurer dynamiquement l'application AR
+ * sans modifier le code source.
+ *
+ * @author Thi Hang NGUYEN
+ * @author Bichoy DAOUD
+ */
+
 #include "app/input.hpp"
 #include <iostream>
 #include <cmath>
 
+/**
+ * @brief Ouvre la source vidéo en fonction de la configuration utilisateur.
+ *
+ * Priorité :
+ * 1. Webcam locale
+ * 2. Flux vidéo téléphone (DroidCam / IP Webcam)
+ * 3. Fichier vidéo
+ *
+ * Pour la webcam, la fonction tente d'abord une configuration
+ * en MJPEG (meilleures performances), puis bascule en YUYV
+ * si les paramètres demandés ne sont pas respectés.
+ *
+ * @param cap Objet OpenCV VideoCapture à initialiser.
+ * @param cfg Configuration des entrées utilisateur.
+ * @return true si la source est ouverte avec succès.
+ * @return false en cas d'échec.
+ */
 bool openVideoSource(cv::VideoCapture& cap, const InputConfig& cfg)
 {
+    // =====================================================
+    // 1. WEBCAM LOCALE
+    // =====================================================
     if (cfg.useWebcam) {
         int camIndex = 0;
         int reqW = 1280, reqH = 720, reqFPS = 30;
 
+        // Ouverture de la webcam via V4L2 (Linux)
         if (!cap.open(camIndex, cv::CAP_V4L2)) {
             std::cerr << "Erreur : webcam non accessible\n";
             return false;
         }
 
-        // Essai MJPEG
+        // Tentative de configuration en MJPEG (meilleur débit)
         cap.set(cv::CAP_PROP_FOURCC,
                 cv::VideoWriter::fourcc('M','J','P','G'));
         cap.set(cv::CAP_PROP_FRAME_WIDTH,  reqW);
         cap.set(cv::CAP_PROP_FRAME_HEIGHT, reqH);
         cap.set(cv::CAP_PROP_FPS,          reqFPS);
 
-        // Fallback YUYV
-        if ((int)cap.get(cv::CAP_PROP_FRAME_WIDTH) != reqW ||
+        // Fallback en YUYV si la configuration MJPEG échoue
+        if ((int)cap.get(cv::CAP_PROP_FRAME_WIDTH)  != reqW ||
             (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT) != reqH ||
             (int)std::round(cap.get(cv::CAP_PROP_FPS)) != reqFPS)
         {
@@ -32,11 +68,12 @@ bool openVideoSource(cv::VideoCapture& cap, const InputConfig& cfg)
             cap.set(cv::CAP_PROP_FPS,          reqFPS);
         }
 
-        // Affichage détaillé pour diagnostic
+        // Affichage des paramètres réellement appliqués (diagnostic)
         int actualW = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
         int actualH = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
         double actualFPS = cap.get(cv::CAP_PROP_FPS);
         int fourcc = (int)cap.get(cv::CAP_PROP_FOURCC);
+
         char codec[5] = {
             (char)(fourcc & 0xFF),
             (char)((fourcc >> 8) & 0xFF),
@@ -50,14 +87,18 @@ bool openVideoSource(cv::VideoCapture& cap, const InputConfig& cfg)
                   << " @ " << actualFPS << " FPS"
                   << " [Codec: " << codec << "]\n";
 
+        // Avertissement si le framerate est trop faible
         if (actualFPS < 25) {
-            std::cout << "[WARN] FPS faible ! Ta camera ne supporte peut-etre pas 30 FPS a cette resolution.\n";
-            std::cout << "       Essaie de reduire la resolution ou verifie que MJPEG est supporte.\n";
+            std::cout << "[WARN] FPS faible : la caméra ne supporte peut-être pas 30 FPS à cette résolution.\n";
+            std::cout << "       Réduis la résolution ou vérifie le support MJPEG.\n";
         }
 
         return true;
     }
 
+    // =====================================================
+    // 2. FLUX VIDÉO TÉLÉPHONE
+    // =====================================================
     if (cfg.usePhone) {
         std::cout << "[INFO] Connexion DroidCam: " << cfg.phoneUrl << "\n";
         if (!cap.open(cfg.phoneUrl)) {
@@ -67,7 +108,9 @@ bool openVideoSource(cv::VideoCapture& cap, const InputConfig& cfg)
         return true;
     }
 
-    // Vidéo fichier
+    // =====================================================
+    // 3. FICHIER VIDÉO
+    // =====================================================
     std::cout << "[INFO] Lecture vidéo: " << cfg.videoPath << "\n";
     if (!cap.open(cfg.videoPath)) {
         std::cerr << "Erreur : vidéo introuvable\n";
@@ -77,18 +120,36 @@ bool openVideoSource(cv::VideoCapture& cap, const InputConfig& cfg)
     return true;
 }
 
-
+/**
+ * @brief Analyse les arguments de la ligne de commande.
+ *
+ * Cette fonction permet de configurer :
+ * - la source vidéo (webcam, téléphone, fichier)
+ * - la calibration caméra associée
+ * - la difficulté du jeu
+ * - le thème graphique
+ * - les paramètres physiques (vitesse, rebond)
+ *
+ * Les valeurs par défaut sont définies dans la structure InputConfig.
+ *
+ * @param argc Nombre d'arguments.
+ * @param argv Tableau des arguments.
+ * @param[out] cfg Structure de configuration à remplir.
+ * @return true si le parsing est valide.
+ * @return false en cas d'erreur ou d'argument inconnu.
+ */
 bool parseArgs(int argc, char** argv, InputConfig& cfg)
 {
-    // Valeurs par défaut déjà définies dans le struct InputConfig 
-    // (difficulty = EASY, videoPath = default, etc.)
-    if (argc <= 1) return true; 
+    // Aucun argument : on conserve la configuration par défaut
+    if (argc <= 1) return true;
 
-    // On parcourt tous les arguments un par un
+    // Parcours séquentiel des arguments
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
 
-        // --- CHOIX DE LA SOURCE ---
+        // =================================================
+        // SOURCE VIDÉO
+        // =================================================
         if (arg == "--webcam") {
             cfg.useWebcam = true;
             cfg.calibPath = "../data/camera_webcam.yaml";
@@ -96,7 +157,7 @@ bool parseArgs(int argc, char** argv, InputConfig& cfg)
         else if (arg == "--phone") {
             if (i + 1 < argc) {
                 cfg.usePhone = true;
-                cfg.phoneUrl = argv[++i]; // On consomme l'argument suivant (l'URL)
+                cfg.phoneUrl = argv[++i];
                 cfg.calibPath = "../data/camera_ip11.yaml";
             } else {
                 std::cerr << "Usage: --phone <url_droidcam>\n";
@@ -105,14 +166,17 @@ bool parseArgs(int argc, char** argv, InputConfig& cfg)
         }
         else if (arg == "--video") {
             if (i + 2 < argc) {
-                cfg.videoPath = argv[++i]; // On prend le path
-                cfg.calibPath = argv[++i]; // On prend le calib
+                cfg.videoPath = argv[++i];
+                cfg.calibPath = argv[++i];
             } else {
                 std::cerr << "Usage: --video <video_path> <calibration_path>\n";
                 return false;
             }
         }
-        // --- CHOIX DE LA DIFFICULTÉ ---
+
+        // =================================================
+        // DIFFICULTÉ DU JEU
+        // =================================================
         else if (arg == "--ez") {
             cfg.difficulty = game::Difficulty::EASY;
             std::cout << "[CONFIG] Difficulté : FACILE\n";
@@ -125,37 +189,45 @@ bool parseArgs(int argc, char** argv, InputConfig& cfg)
             cfg.difficulty = game::Difficulty::HARD;
             std::cout << "[CONFIG] Difficulté : DIFFICILE\n";
         }
-        // --- DESIGN ---
+
+        // =================================================
+        // DESIGN GRAPHIQUE
+        // =================================================
         else if (arg == "--design") {
             if (i + 1 < argc) {
                 int d = std::stoi(argv[++i]);
                 if (d == 1) cfg.designTheme = DesignTheme::DEFAULT;
                 else if (d == 2) cfg.designTheme = DesignTheme::SPACE;
                 else if (d == 3) cfg.designTheme = DesignTheme::DESERT;
-                else std::cerr << "[WARN] Design inconnu (1-3), defaut applique.\n";
+                else std::cerr << "[WARN] Design inconnu (1–3), défaut appliqué.\n";
             }
         }
 
-        // --- SPEED (Vitesse/Gravité) ---
+        // =================================================
+        // PHYSIQUE : VITESSE / GRAVITÉ
+        // =================================================
         else if (arg == "--speed") {
             if (i + 1 < argc) {
                 std::string val = argv[++i];
-                if (val == "moon") cfg.speedMode = PhysicsMode::MOON;
+                if (val == "moon")  cfg.speedMode = PhysicsMode::MOON;
                 else if (val == "earth") cfg.speedMode = PhysicsMode::EARTH;
             }
         }
 
-        // --- BOUNCE (Rebond) ---
+        // =================================================
+        // PHYSIQUE : REBOND
+        // =================================================
         else if (arg == "--bounce") {
             if (i + 1 < argc) {
                 std::string val = argv[++i];
-                if (val == "moon") cfg.bounceMode = PhysicsMode::MOON;
+                if (val == "moon")  cfg.bounceMode = PhysicsMode::MOON;
                 else if (val == "earth") cfg.bounceMode = PhysicsMode::EARTH;
             }
         }
         else {
             std::cerr << "Argument inconnu ou mal placé : " << arg << "\n";
-            return false;}
+            return false;
+        }
     }
 
     return true;

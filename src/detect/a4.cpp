@@ -1,8 +1,36 @@
 /**
  * @file a4.cpp
- * @brief Implementation de la detection de feuille A4.
- * @author Thi Hang NGUYEN & Bichoy DAOUD
+ * @brief Détection et tracking robuste d’une feuille A4 pour la réalité augmentée.
+ *
+ * Ce fichier implémente l’ensemble du pipeline de détection d’une feuille A4
+ * dans une image caméra, utilisé comme support physique pour la scène AR.
+ *
+ * Le système repose sur :
+ * - un prétraitement (niveaux de gris, flou gaussien)
+ * - trois méthodes de détection en cascade :
+ *   1) seuillage dynamique basé sur la luminosité centrale
+ *   2) seuillage adaptatif Otsu
+ *   3) détection de contours par Canny (fallback)
+ * - une sélection du meilleur contour quadrilatère
+ * - un ordonnancement cohérent des coins (TL, TR, BR, BL)
+ *
+ * Pour améliorer la stabilité temporelle, le module intègre :
+ * - un mécanisme de tracking inter-frames des coins
+ * - une tolérance aux pertes temporaires (persistance rétinienne)
+ * - une validation géométrique (aire, convexité, ratio implicite)
+ *
+ * Le fichier fournit également :
+ * - les coordonnées 3D normalisées d’une feuille A4
+ * - des outils de visualisation des coins détectés
+ * - une mesure de flou basée sur la variance du Laplacien
+ *
+ * Ce module constitue la base du calcul de pose caméra (solvePnP)
+ * et de l’alignement précis entre le monde réel et la scène virtuelle.
+ *
+ * @author Thi Hang NGUYEN
+ * @author Bichoy DAOUD
  */
+
 
 #include "detect/a4.hpp"
 #include <opencv2/imgproc.hpp>

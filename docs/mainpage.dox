@@ -1,0 +1,21 @@
+/**
+ * @mainpage Projet AR 2025 – Réalité Augmentée
+ *
+ * @section intro Introduction
+ * Ce projet implémente un système de Réalité Augmentée utilisant OpenCV et OpenGL.
+ * Il détecte une feuille A4 dans une vidéo ou via une webcam et y superpose une scène 3D interactive.
+ *
+ * @section features Fonctionnalités
+ * - Détection A4 robuste (Threshold dynamique, Otsu, Canny)
+ * - Tracking inter-frames avec persistance
+ * - Calcul de pose caméra (solvePnP)
+ * - Physique 2D (gravité, collisions, labyrinthe)
+ * - Rendu OpenGL (shaders, textures, ombres)
+ *
+ * @section authors Auteurs
+ * - Thi Hang NGUYEN
+ * - Bichoy DAOUD
+ *
+ * @section build Compilation
+ * Projet compilé avec CMake.
+ */

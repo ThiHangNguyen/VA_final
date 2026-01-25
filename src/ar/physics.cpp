@@ -1,3 +1,27 @@
+/**
+ * @file physics.cpp
+ * @brief Gestion de la physique de la balle dans le plan AR.
+ *
+ * Ce fichier implémente la logique physique principale du jeu :
+ * - calcul de la gravité projetée sur le plan détecté (A4)
+ * - intégration du mouvement de la balle
+ * - gestion des collisions avec les murs du labyrinthe
+ * - gestion des collisions avec les bords de la feuille A4
+ * - application de paramètres utilisateur (vitesse, rebond)
+ *
+ * Le système inclut plusieurs mécanismes de stabilisation :
+ * - filtrage passe-bas (EMA) de l'accélération pour réduire le jitter AR
+ * - sous-échantillonnage du mouvement (sub-stepping) pour éviter le tunneling
+ * - limitation de la vitesse maximale
+ *
+ * La physique est découplée du rendu et repose sur les données
+ * de pose caméra (rvec) issues du pipeline de détection AR.
+ *
+ * @author Thi Hang NGUYEN
+ * @author Bichoy DAOUD
+ */
+
+
 #include "ar/physics.hpp"
 #include "ar/filter.hpp"
 #include <cmath>

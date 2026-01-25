@@ -14,7 +14,7 @@
 #include <GL/glew.h>
 #include <opencv2/opencv.hpp>
 #include <string>
-#include "app/game.hpp"  // Pour DesignTheme
+#include "app/game.hpp"  
 
 namespace app {
 

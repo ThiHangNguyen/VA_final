@@ -1,3 +1,31 @@
+/**
+ * @file render.cpp
+ * @brief Rendu OpenGL des éléments de la scène AR.
+ *
+ * Ce fichier regroupe l’ensemble des fonctions de rendu
+ * utilisées dans le pipeline de réalité augmentée :
+ *
+ * - création et initialisation des programmes shaders
+ * - chargement et gestion des textures OpenGL
+ * - rendu du fond vidéo issu de la caméra
+ * - rendu des objets 3D (balle, sol, murs, cible)
+ * - affichage des axes de coordonnées pour le debug AR
+ * - calcul et affichage des ombres projetées
+ *
+ * Le rendu repose sur les matrices de projection et de vue
+ * calculées à partir des données OpenCV (calibration et pose),
+ * assurant un alignement précis entre le monde réel et
+ * les objets virtuels.
+ *
+ * Ce module constitue le lien central entre :
+ * - la vision par ordinateur (OpenCV)
+ * - la logique AR (pose, physique)
+ * - le rendu temps réel (OpenGL / GLSL)
+ *
+ * @author Thi Hang NGUYEN
+ * @author Bichoy DAOUD
+ */
+
 #include "ar/render.hpp"
 #include "glx/shaders.hpp"
 #include "glx/texture.hpp"

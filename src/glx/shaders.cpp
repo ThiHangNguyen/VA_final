@@ -1,3 +1,32 @@
+/**
+ * @file shaders.cpp
+ * @brief Compilation, linkage et définition des shaders GLSL OpenGL.
+ *
+ * Ce fichier centralise :
+ * - les fonctions utilitaires de compilation et de linkage des shaders OpenGL
+ * - l’ensemble des sources GLSL intégrées au projet (vertex, fragment, geometry)
+ *
+ * Les shaders couvrent plusieurs usages :
+ * - fond vidéo plein écran (background)
+ * - lignes épaisses 2D/3D via geometry shader
+ * - rendu solide coloré
+ * - rendu texturé
+ * - éclairage Phong (ambient, diffus, spéculaire)
+ * - rendu d’ombres projetées semi-transparentes
+ *
+ * Les shaders sont fournis sous forme de chaînes C++ et
+ * compilés dynamiquement au lancement de l’application.
+ *
+ * Ce découplage permet :
+ * - un contrôle précis du pipeline graphique
+ * - une maintenance facilitée des effets visuels
+ * - une intégration claire avec le moteur de rendu AR
+ *
+ * @author Thi Hang NGUYEN
+ * @author Bichoy DAOUD
+ */
+
+
 #include "glx/shaders.hpp"
 #include <stdexcept>
 #include <iostream>

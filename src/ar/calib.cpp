@@ -1,3 +1,23 @@
+/**
+ * @file calib.cpp
+ * @brief Chargement et gestion des paramètres de calibration caméra.
+ *
+ * Ce fichier fournit les fonctions nécessaires pour charger
+ * les paramètres intrinsèques de la caméra (matrice caméra
+ * et coefficients de distorsion) depuis un fichier YAML/XML
+ * généré par OpenCV.
+ *
+ * Ces paramètres sont utilisés dans le pipeline AR pour :
+ * - la correction de la distorsion
+ * - le calcul de pose (solvePnP)
+ * - l'alignement cohérent des objets 3D avec l'image réelle
+ *
+ * Le chargement inclut des vérifications de validité afin
+ * d'éviter toute utilisation de données de calibration incorrectes.
+ *
+ * @author Thi Hang NGUYEN
+ */
+
 #include "ar/calib.hpp"
 #include <opencv2/core.hpp>
 #include <stdexcept>

@@ -1,3 +1,30 @@
+/**
+ * @file ui_draw.cpp
+ * @brief Outils de rendu 2D pour l'interface utilisateur (UI) en OpenGL.
+ *
+ * Ce fichier regroupe l'ensemble des fonctions utilitaires
+ * nécessaires au rendu de l'interface graphique du projet :
+ *
+ * - mise à l'échelle automatique de l'UI selon la résolution
+ * - rendu d'une police bitmap personnalisée
+ * - calculs de tailles et centrage de texte
+ * - primitives 2D (rectangles, cercles, LEDs)
+ * - effets visuels (lumières, halo, confettis, disco ball)
+ * - styles graphiques (dégradés, boutons, signatures animées)
+ *
+ * Le rendu est réalisé en OpenGL immédiat (mode 2D),
+ * indépendamment du pipeline AR 3D principal.
+ *
+ * Ce module est partagé par :
+ * - le menu principal
+ * - la page des paramètres
+ * - l'écran de victoire
+ *
+ * @author Thi Hang NGUYEN
+ * @author Bichoy DAOUD
+ */
+
+
 #include "app/game.hpp"
 #include <map>
 #include <vector>

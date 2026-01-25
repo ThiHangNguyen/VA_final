@@ -1,3 +1,35 @@
+/**
+ * @file maze.cpp
+ * @brief Génération procédurale d’un labyrinthe pour le jeu AR.
+ *
+ * Ce fichier implémente la génération d’un labyrinthe 2D
+ * à l’intérieur de la surface de jeu (feuille A4),
+ * avec une difficulté ajustable.
+ *
+ * Le labyrinthe est construit à l’aide de l’algorithme
+ * DFS "Recursive Backtracker", garantissant :
+ * - un labyrinthe connexe (au moins un chemin valide)
+ * - une structure sans cycles
+ * - une complexité adaptée au niveau de difficulté
+ *
+ * Les cellules générées sont ensuite converties en murs
+ * physiques (segments glx::Wall) utilisables par :
+ * - le moteur de collision
+ * - le rendu OpenGL
+ *
+ * Le module inclut également une validation de chemin
+ * par parcours en largeur (BFS) afin de vérifier
+ * l’accessibilité entre le départ et l’arrivée.
+ *
+ * Ce composant fait le lien entre :
+ * - la logique de jeu (difficulté, progression)
+ * - la physique (collisions)
+ * - la scène AR (positionnement dans le plan A4)
+ *
+ * @author Thi Hang NGUYEN
+ * @author Bichoy DAOUD
+ */
+
 #include "game/maze.hpp"
 #include <stack>
 #include <queue>

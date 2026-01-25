@@ -1,3 +1,32 @@
+/**
+ * @file mesh.cpp
+ * @brief Génération de géométries OpenGL (meshes) pour le rendu AR.
+ *
+ * Ce fichier regroupe l’ensemble des fonctions de création
+ * de maillages OpenGL utilisés dans l’application :
+ * - géométries de base (quad, cube filaire, axes)
+ * - sphère texturée (balle)
+ * - murs extrudés à partir de segments 2D
+ * - labyrinthe généré procéduralement
+ *
+ * Les meshes sont générés dynamiquement côté CPU puis
+ * transférés vers le GPU via des VAO / VBO / EBO.
+ * Ils sont ensuite utilisés par le moteur de rendu
+ * (shaders Phong, lignes, solides).
+ *
+ * Le module fait le lien entre :
+ * - la logique de jeu (MazeGenerator, Difficulty)
+ * - la représentation physique (murs, épaisseur, hauteur)
+ * - le rendu OpenGL (triangles, wireframe, textures)
+ *
+ * Toutes les géométries sont exprimées dans le repère
+ * du monde AR (plan A4 centré en (0,0)).
+ *
+ * @author Thi Hang NGUYEN
+ * @author Bichoy DAOUD
+ */
+
+
 #include "glx/mesh.hpp"
 #include <vector>
 #include <array>        // OBLIGATOIRE pour std::array

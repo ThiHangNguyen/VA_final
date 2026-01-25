@@ -1,3 +1,27 @@
+/**
+ * @file filter.cpp
+ * @brief Implémentation de filtres passe-bas pour le lissage des signaux AR.
+ *
+ * Ce fichier implémente des filtres passe-bas de type
+ * moyenne exponentielle (EMA – Exponential Moving Average)
+ * pour différentes dimensions :
+ *
+ * - LowPassFilter   : valeurs scalaires (float)
+ * - LowPassFilter2D : vecteurs 2D (glm::vec2)
+ * - LowPassFilter3D : vecteurs 3D (glm::vec3)
+ *
+ * Ces filtres sont utilisés dans le pipeline de réalité augmentée
+ * afin de :
+ * - réduire le bruit des mesures (détection, tracking)
+ * - limiter les tremblements visuels
+ * - améliorer la stabilité temporelle des poses et des mouvements
+ *
+ * Le paramètre alpha contrôle le compromis entre réactivité
+ * (alpha élevé) et stabilité (alpha faible).
+ *
+ * @author Thi Hang NGUYEN
+ */
+
 #include "ar/filter.hpp"
 
 namespace ar {

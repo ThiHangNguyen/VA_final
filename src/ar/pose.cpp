@@ -1,3 +1,28 @@
+/**
+ * @file pose.cpp
+ * @brief Conversion des paramètres de pose OpenCV vers des matrices OpenGL.
+ *
+ * Ce fichier fournit les fonctions de conversion nécessaires pour
+ * intégrer les résultats de la vision par ordinateur (OpenCV)
+ * dans le pipeline de rendu OpenGL :
+ *
+ * - construction de la matrice de projection OpenGL à partir
+ *   de la matrice intrinsèque caméra (K)
+ * - conversion des vecteurs de rotation (rvec) et de translation (tvec)
+ *   en matrice de vue OpenGL
+ *
+ * Les transformations incluent :
+ * - l'adaptation des conventions de repère OpenCV → OpenGL
+ * - la gestion correcte des plans proche et lointain
+ * - la conversion vers glm::mat4 pour le rendu 3D
+ *
+ * Ce module est central pour assurer l'alignement précis
+ * entre le monde réel (caméra) et les objets virtuels en AR.
+ *
+ * @author Thi Hang NGUYEN
+ * @author Bichoy DAOUD
+ */
+
 #include "ar/pose.hpp"
 #include <opencv2/calib3d.hpp>
 #include <glm/gtc/type_ptr.hpp>
