@@ -15,22 +15,20 @@
 #include "glx/mesh.hpp"           // Création des maillages 3D
 #include "glx/shaders.hpp"        // Compilation / linkage des shaders
 #include "glx/texture.hpp"        // Gestion de la texture
-#include "ar/physics.hpp"        // Gestion des collisions
+#include "ar/physics.hpp"         // Gestion des collisions
 #include "glx/cleanup.hpp"        // Nettoyage à la fin
 
-#include "app/init.hpp"          // Initialisation OpenGL
-#include "app/input.hpp"         // Parsing des arguments d'entrée
-#include "app/game.hpp"          // Gestion des états de l'application
+#include "app/init.hpp"           // Initialisation OpenGL
+#include "app/input.hpp"          // Parsing des arguments d'entrée
+#include "app/game.hpp"           // Gestion des états de l'application
 #include "app/score.hpp"
 
-
-#include "game/maze.hpp"         // Génération du labyrinthe
+#include "game/maze.hpp"          // Génération du labyrinthe
 
 #include <iostream>
 #include <stdexcept>
 #include <vector>
 #include <string>
-
 
 GameResult runApp(int argc, char** argv, AppConfig& config) {
     GameResult result= { EndReason::QUIT, 0.0, config.difficulty };
@@ -340,9 +338,25 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
 
             if (!cap.read(frameBGR) || frameBGR.empty()) break;
 
+            // === DETECTION DE FLOU ===
+            // On mesure la netteté de l'image pour avertir l'utilisateur
+            // et éviter les fausses détections quand l'image est trop floue
+            const double BLUR_THRESHOLD = 100.0; // Seuil de netteté (ajustable)
+            double sharpness = detect::measureBlur(frameBGR);
+            bool imageIsBlurry = sharpness < BLUR_THRESHOLD;
+
             // Détection A4 simple (sans tracking complexe)
             std::vector<cv::Point2f> imagePts;
-            bool okDetect = detect::detectA4Corners(frameBGR, imagePts);
+            bool okDetect = false;
+
+            // Si l'image est trop floue, on saute la détection et on utilise les dernières valeurs
+            if (!imageIsBlurry) {
+                okDetect = detect::detectA4Corners(frameBGR, imagePts);
+            } else {
+                // Image floue : on garde les dernières coordonnées valides
+                // (la fonction detectA4Corners gère déjà la persistance avec MAX_LOST_FRAMES)
+                okDetect = detect::detectA4Corners(frameBGR, imagePts);
+            }
 
             if (okDetect) {
                 // Calcul de la pose avec solvePnP
@@ -392,27 +406,41 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                 cv::putText(frameBGR, msg, textOrg, cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
             }
 
+            // === AFFICHAGE AVERTISSEMENT FLOU ===
+            // Afficher seulement si l'image est floue ET que la détection échoue
+            if (imageIsBlurry && !okDetect) {
+                std::string blurMsg = "Image floue ! Stabilisez la camera...";
+                int baseline = 0;
+                cv::Size textSize = cv::getTextSize(blurMsg, cv::FONT_HERSHEY_SIMPLEX, 0.8, 2, &baseline);
+
+                // Afficher en bas de l'écran
+                cv::Point textOrg((frameBGR.cols - textSize.width) / 2, frameBGR.rows - 30);
+
+                // Fond rouge semi-transparent pour attirer l'attention
+                cv::rectangle(frameBGR,
+                    textOrg + cv::Point(-10, baseline + 5),
+                    textOrg + cv::Point(textSize.width + 10, -textSize.height - 5),
+                    cv::Scalar(0, 0, 100), -1);
+                // Texte blanc
+                cv::putText(frameBGR, blurMsg, textOrg, cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+            }
+
             // === AFFICHAGE HUD (sur la frame vidéo) ===
 
-            // Filigrane PAUSE
+            // Affichage PAUSE (en haut au milieu)
             if (paused) {
                 std::string pauseMsg = "PAUSE";
                 int baseline = 0;
-                double scale = 3.0;
-                int thickness = 5;
-                cv::Size textSize = cv::getTextSize(pauseMsg, cv::FONT_HERSHEY_SIMPLEX, scale, thickness, &baseline);
-                cv::Point center((frameBGR.cols - textSize.width) / 2, (frameBGR.rows + textSize.height) / 2);
+                cv::Size textSize = cv::getTextSize(pauseMsg, cv::FONT_HERSHEY_SIMPLEX, 1.2, 3, &baseline);
+                cv::Point pos((frameBGR.cols - textSize.width) / 2, 40);
 
-                // Ombre
-                cv::putText(frameBGR, pauseMsg, center + cv::Point(3, 3), cv::FONT_HERSHEY_SIMPLEX, scale, cv::Scalar(0, 0, 0), thickness + 2);
-                // Texte principal (jaune)
-                cv::putText(frameBGR, pauseMsg, center, cv::FONT_HERSHEY_SIMPLEX, scale, cv::Scalar(0, 255, 255), thickness);
-
-                // Sous-titre
-                std::string subMsg = "Appuyez sur ESPACE pour continuer";
-                cv::Size subSize = cv::getTextSize(subMsg, cv::FONT_HERSHEY_SIMPLEX, 0.7, 2, &baseline);
-                cv::Point subCenter((frameBGR.cols - subSize.width) / 2, center.y + 50);
-                cv::putText(frameBGR, subMsg, subCenter, cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(255, 255, 255), 2);
+                // Fond noir pour lisibilité
+                cv::rectangle(frameBGR,
+                    pos + cv::Point(-10, baseline + 5),
+                    pos + cv::Point(textSize.width + 10, -textSize.height - 5),
+                    cv::Scalar(0, 0, 0), -1);
+                // Texte jaune
+                cv::putText(frameBGR, pauseMsg, pos, cv::FONT_HERSHEY_SIMPLEX, 1.2, cv::Scalar(0, 255, 255), 3);
             }
 
             // Affichage FPS (coin haut gauche)
@@ -528,9 +556,6 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                 drawText(10.0f * uiScale, fbh - 20.0f * uiScale, 2.0f * uiScale, timeStr);
             }
 
-            if (paused) {
-                drawText(10.0f * uiScale, 30.0f * uiScale, 1.0f * uiScale, "PAUSED");
-            }
 
             glfwSwapBuffers(window);
             /*

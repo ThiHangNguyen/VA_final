@@ -234,4 +234,37 @@ void drawOrderedCorners(cv::Mat& img, const std::vector<cv::Point2f>& pts) {
   }
 }
 
+// ===========================================================
+// DETECTION DE FLOU (Variance du Laplacien)
+// ===========================================================
+
+double measureBlur(const cv::Mat& frame) {
+    if (frame.empty()) return 0.0;
+
+    cv::Mat gray;
+    if (frame.channels() == 3) {
+        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+    } else {
+        gray = frame;
+    }
+
+    // Calcul du Laplacien (détection de bords)
+    cv::Mat laplacian;
+    cv::Laplacian(gray, laplacian, CV_64F);
+
+    // Calcul de la variance (mean et stddev)
+    cv::Scalar mean, stddev;
+    cv::meanStdDev(laplacian, mean, stddev);
+
+    // La variance est le carré de l'écart-type
+    double variance = stddev[0] * stddev[0];
+
+    return variance;
+}
+
+bool isBlurry(const cv::Mat& frame, double threshold) {
+    double sharpness = measureBlur(frame);
+    return sharpness < threshold;
+}
+
 } // namespace detect

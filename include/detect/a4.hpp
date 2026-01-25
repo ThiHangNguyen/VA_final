@@ -64,4 +64,26 @@ void drawOrderedCorners(cv::Mat& img, const std::vector<cv::Point2f>& pts);
 bool findBestA4Contour(const cv::Mat& mask, std::vector<cv::Point>& outApprox, int W, int H) ;
 bool finalizeDetection(const std::vector<cv::Point>& approx, const cv::Mat& frame, std::vector<cv::Point2f>& imagePts, std::string method) ;
 
+/**
+ * @brief Mesure la netteté d'une image en utilisant la variance du Laplacien.
+ *
+ * Cette méthode calcule le Laplacien de l'image (détection de bords) puis
+ * mesure sa variance. Une image nette aura une variance élevée (beaucoup de
+ * détails/bords), tandis qu'une image floue aura une variance faible.
+ *
+ * @param frame Image d'entrée en BGR ou niveaux de gris.
+ * @return Score de netteté (variance du Laplacien). Plus c'est élevé, plus c'est net.
+ *         Typiquement: < 100 = très flou, 100-300 = flou, > 300 = net
+ */
+double measureBlur(const cv::Mat& frame);
+
+/**
+ * @brief Vérifie si une image est considérée comme floue.
+ *
+ * @param frame Image d'entrée en BGR ou niveaux de gris.
+ * @param threshold Seuil de netteté (défaut = 100.0). En dessous = flou.
+ * @return true si l'image est floue, false sinon.
+ */
+bool isBlurry(const cv::Mat& frame, double threshold = 100.0);
+
 } // namespace detect
