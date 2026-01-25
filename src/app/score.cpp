@@ -92,7 +92,7 @@ static std::string difficultyToString(game::Difficulty diff) {
 int showScoreWindow(const GameResult& result) {
     if (!glfwInit()) return 1;
 
-    GLFWwindow* window = glfwCreateWindow(800, 600, "VICTOIRE", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(800, 600, "VICTORY", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return 1;
