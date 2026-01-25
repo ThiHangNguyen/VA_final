@@ -40,7 +40,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         bool lastEscPressed   = false;
 
         // Toggles affichage (F = FPS, T = Temps)
-        bool showFPS = false;
+        bool showFPS = true;  // FPS affichés par défaut
         bool showTime = true; // Temps affiché par défaut
         bool lastFPressed = false;
         bool lastTPressed = false;
@@ -263,7 +263,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         // === GESTION DU SCORE ===
         double startTime = glfwGetTime();
         double finalTime = 0.0;
-        
+
         const float WIN_THRESHOLD = 17.0f; // Distance en mm pour gagner (environ une demi-cellule)
         // === BOUCLE PRINCIPALE ===
         while (!glfwWindowShouldClose(window)) {
@@ -429,7 +429,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
 
             // Affichage PAUSE (en haut au milieu)
             if (paused) {
-                std::string pauseMsg = "PAUSE";
+                std::string pauseMsg = "PAUSE. Espace/Echap -> reprendre/quitter.";
                 int baseline = 0;
                 cv::Size textSize = cv::getTextSize(pauseMsg, cv::FONT_HERSHEY_SIMPLEX, 1.2, 3, &baseline);
                 cv::Point pos((frameBGR.cols - textSize.width) / 2, 40);

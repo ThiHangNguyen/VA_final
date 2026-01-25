@@ -107,122 +107,162 @@ bool orderCornersTracking(const std::vector<cv::Point>& approx,
 }
 
 // ===========================================================
-// DETECTION PRINCIPALE
+// RECHERCHE DU MEILLEUR CONTOUR A4 (fonction utilitaire)
+// ===========================================================
+bool findBestA4Contour(
+    const cv::Mat& mask,
+    std::vector<cv::Point>& outApprox,
+    int W,
+    int H
+) {
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+    double bestScore = 0.0;
+    std::vector<cv::Point> best;
+
+    for (const auto& c : contours) {
+        double peri = cv::arcLength(c, true);
+        if (peri < (W + H) * 0.3) continue; // trop petit → bruit
+
+        std::vector<cv::Point> approx;
+        cv::approxPolyDP(c, approx, 0.02 * peri, true);
+
+        if (approx.size() != 4) continue;
+        if (!cv::isContourConvex(approx)) continue;
+
+        double area = std::fabs(cv::contourArea(approx));
+        if (area < W * H * 0.02) continue;
+
+        // score = périmètre + aire → favorise la vraie feuille
+        double score = peri + 0.001 * area;
+        if (score > bestScore) {
+            bestScore = score;
+            best = approx;
+        }
+    }
+
+    if (!best.empty()) {
+        outApprox = best;
+        return true;
+    }
+    return false;
+}
+
+// ===========================================================
+// DETECTION PRINCIPALE (3 méthodes en cascade)
 // ===========================================================
 bool detectA4Corners(const cv::Mat& frameBGR, std::vector<cv::Point2f>& imagePts) {
+    imagePts.clear();
 
-    const int H = frameBGR.rows;
     const int W = frameBGR.cols;
+    const int H = frameBGR.rows;
 
-    // ---------------------------------------------------------
-    // ETAPE 1: Pre-traitement (grayscale + flou)
-  cv::Mat gray, blurred, thresh;
-  cv::cvtColor(frameBGR, gray, cv::COLOR_BGR2GRAY);
+    // =============================
+    // 1. PRÉTRAITEMENT
+    // =============================
+    cv::Mat gray, blurred;
+    cv::cvtColor(frameBGR, gray, cv::COLOR_BGR2GRAY);
+    cv::GaussianBlur(gray, blurred, cv::Size(7, 7), 0);
 
-  // Flou léger pour enlever le bruit caméra
-  cv::GaussianBlur(gray, blurred, cv::Size(5,5), 0);
+    // =============================
+    // 2. SEUIL DYNAMIQUE (basé sur luminosité centrale)
+    // =============================
+    const int rw = W / 3;
+    const int rh = H / 3;
+    const int rx = (W - rw) / 2;
+    const int ry = (H - rh) / 2;
 
-  // 2. Otsu Robuste
-  // On prend un échantillon central pour calculer le seuil (évite les bordures noires de caméra)
-  cv::Rect roi(W/4, H/4, W/2, H/2);
-  cv::Mat roiImg = blurred(roi);
-  cv::Mat tempThresh;
+    cv::Rect roi(rx, ry, rw, rh);
+    double meanLuma = cv::mean(blurred(roi))[0];
+    double threshVal = std::max(10.0, std::min(240.0, meanLuma - 15.0));
 
-  double calculatedT = cv::threshold(roiImg, tempThresh, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-  if (calculatedT < 40.0) calculatedT = 40.0; // Sécurité ambiance sombre
+    std::vector<cv::Point> approx;
 
-  cv::threshold(blurred, thresh, calculatedT, 255, cv::THRESH_BINARY);
+    // =============================
+    // MÉTHODE 1 — THRESHOLD DYNAMIQUE
+    // =============================
+    {
+        cv::Mat bin;
+        cv::threshold(blurred, bin, threshVal, 255, cv::THRESH_BINARY);
 
-  // --- AMÉLIORATION MAJEURE : MORPHOLOGIE ---
-  // C'est ICI qu'on gère le mouvement rapide.
-  // "Dilater" puis "Eroder" (Close) va reconnecter les lignes brisées par le flou de bougé.
-  cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
-  cv::morphologyEx(thresh, thresh, cv::MORPH_CLOSE, kernel);
-  // On dilate un peu pour "engraisser" les contours fins
-  cv::dilate(thresh, thresh, kernel);
+        // Morphologie pour améliorer la détection
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+        cv::morphologyEx(bin, bin, cv::MORPH_CLOSE, kernel);
 
-  // 3. Contours
-  std::vector<std::vector<cv::Point>> contours;
-  cv::findContours(thresh, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-  if (contours.empty()) {
-      // Si on perd le tracking, on garde l'ancienne position quelques frames (persistance rétinienne)
-      if (hasTracking && lostFramesCount < MAX_LOST_FRAMES) {
-          imagePts = prevCorners;
-          lostFramesCount++;
-          return true;
-      }
-      hasTracking = false; return false;
-  }
-
-  // Trouver le plus grand contour
-  double maxA = 0; int maxIdx = -1;
-  for (int i = 0; i < (int)contours.size(); ++i){
-    const double A = std::fabs(cv::contourArea(contours[i]));
-    if (A > maxA && A > (W*H*0.02)){ // Doit faire au moins 2% de l'image
-        maxA = A; maxIdx = i;
+        if (findBestA4Contour(bin, approx, W, H)) {
+            if (orderFourCornersGeometric(approx, imagePts)) {
+                // Persistance pour stabilité
+                if (hasTracking) {
+                    orderCornersTracking(approx, imagePts);
+                }
+                prevCorners = imagePts;
+                hasTracking = true;
+                lostFramesCount = 0;
+                return true;
+            }
+        }
     }
-  }
 
-  if (maxIdx < 0) {
-       if (hasTracking && lostFramesCount < MAX_LOST_FRAMES) {
-          imagePts = prevCorners;
-          lostFramesCount++;
-          return true;
-      }
-      hasTracking = false; return false;
-  }
+    // =============================
+    // MÉTHODE 2 — OTSU (adaptatif)
+    // =============================
+    {
+        cv::Mat bin;
+        cv::threshold(blurred, bin, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
 
-  // --- AMÉLIORATION MAJEURE : CONVEX HULL ---
-  // Si le mouvement est flou, le contour est dentelé.
-  // ConvexHull crée une enveloppe lisse autour (comme un élastique), ce qui redonne 4 coins propres.
-  std::vector<cv::Point> hull;
-  cv::convexHull(contours[maxIdx], hull);
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+        cv::morphologyEx(bin, bin, cv::MORPH_CLOSE, kernel);
+        cv::dilate(bin, bin, kernel);
 
-  std::vector<cv::Point> approx;
-  // Approximation polygonale sur le Hull, pas sur le contour brut !
-  double eps = 0.04 * cv::arcLength(hull, true); // 0.04 est plus permissif que 0.02
-  cv::approxPolyDP(hull, approx, eps, true);
+        if (findBestA4Contour(bin, approx, W, H)) {
+            if (orderFourCornersGeometric(approx, imagePts)) {
+                if (hasTracking) {
+                    orderCornersTracking(approx, imagePts);
+                }
+                prevCorners = imagePts;
+                hasTracking = true;
+                lostFramesCount = 0;
+                return true;
+            }
+        }
+    }
 
-  // Si on a raté, on réessaie avec un epsilon plus large
-  if (approx.size() != 4) {
-      eps = 0.05 * cv::arcLength(hull, true);
-      cv::approxPolyDP(hull, approx, eps, true);
-  }
+    // =============================
+    // MÉTHODE 3 — CANNY (dernier recours)
+    // =============================
+    {
+        cv::Mat edges;
+        cv::Canny(blurred, edges, 30, 80);
 
-  if (approx.size() != 4) {
-       if (hasTracking && lostFramesCount < MAX_LOST_FRAMES) {
-          imagePts = prevCorners;
-          lostFramesCount++;
-          return true;
-      }
-      hasTracking = false; return false;
-  }
+        // Dilatation pour connecter les bords
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+        cv::dilate(edges, edges, kernel);
 
-  // 4. Tri et Validation
-  bool ok = false;
+        if (findBestA4Contour(edges, approx, W, H)) {
+            if (orderFourCornersGeometric(approx, imagePts)) {
+                if (hasTracking) {
+                    orderCornersTracking(approx, imagePts);
+                }
+                prevCorners = imagePts;
+                hasTracking = true;
+                lostFramesCount = 0;
+                return true;
+            }
+        }
+    }
 
-  if (hasTracking) {
-      ok = orderCornersTracking(approx, imagePts);
-      if (!ok) ok = orderFourCornersGeometric(approx, imagePts);
-  } else {
-      ok = orderFourCornersGeometric(approx, imagePts);
-  }
+    // =============================
+    // ÉCHEC - Persistance rétinienne
+    // =============================
+    if (hasTracking && lostFramesCount < MAX_LOST_FRAMES) {
+        imagePts = prevCorners;
+        lostFramesCount++;
+        return true;
+    }
 
-  if (ok) {
-      prevCorners = imagePts;
-      hasTracking = true;
-      lostFramesCount = 0; // Reset du compteur de perte
-  } else {
-      // Si le tri échoue mais qu'on avait un tracking, on temporise
-      if (hasTracking && lostFramesCount < MAX_LOST_FRAMES) {
-          imagePts = prevCorners;
-          lostFramesCount++;
-          return true;
-      }
-      hasTracking = false;
-  }
-
-  return ok;
+    hasTracking = false;
+    return false;
 }
 
 void drawOrderedCorners(cv::Mat& img, const std::vector<cv::Point2f>& pts) {
