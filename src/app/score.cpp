@@ -92,7 +92,7 @@ static std::string difficultyToString(game::Difficulty diff) {
 int showScoreWindow(const GameResult& result) {
     if (!glfwInit()) return 1;
 
-    GLFWwindow* window = glfwCreateWindow(600, 400, "VICTOIRE !", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(800, 600, "VICTOIRE", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return 1;
@@ -134,17 +134,17 @@ int showScoreWindow(const GameResult& result) {
         float titleSize = 6.0f * pulse;  // Plus grand
 
         glColor3f(0.0f, 0.9f, 1.0f);
-        drawCenteredText(0, h * 0.68f, w, h * 0.20f, titleSize, "VICTOIRE");
+        drawCenteredText(0, h * 0.68f, w, h * 0.20f, titleSize, "VICTORY !");
 
         // === TEMPS ===
         std::stringstream ssTime;
-        ssTime << "TEMPS " << (int)result.time << " S";
+        ssTime << "TIME " << (int)result.time << " S";
 
         glColor3f(1.0f, 1.0f, 1.0f);
         drawCenteredText(0, h * 0.48f, w, h * 0.12f, 3.5f, ssTime.str());
 
         // === DIFFICULTE ===
-        std::string diffStr = "NIVEAU " + difficultyToString(result.difficulty);
+        std::string diffStr = "LEVEL " + difficultyToString(result.difficulty);
         glColor3f(0.7f, 0.7f, 0.7f);
         drawCenteredText(0, h * 0.34f, w, h * 0.10f, 2.5f, diffStr);
 
@@ -169,7 +169,7 @@ int showScoreWindow(const GameResult& result) {
 
         drawStyledButton(restartX, btnY, btnW, btnH, 0.1f, 0.6f, 0.2f, hoverRestart);
         glColor3f(1.0f, 1.0f, 1.0f);
-        drawCenteredText(restartX, btnY, btnW, btnH, 2.5f, "REJOUER");
+        drawCenteredText(restartX, btnY, btnW, btnH, 2.5f, "PLAY AGAIN");
 
         if (hoverRestart && clickEvent) choice = 0;
 

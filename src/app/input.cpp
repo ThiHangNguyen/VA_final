@@ -6,7 +6,7 @@ bool openVideoSource(cv::VideoCapture& cap, const InputConfig& cfg)
 {
     if (cfg.useWebcam) {
         int camIndex = 0;
-        int reqW = 1280, reqH = 720, reqFPS = 30;
+        int reqW = 1920, reqH = 1080, reqFPS = 30;
 
         if (!cap.open(camIndex, cv::CAP_V4L2)) {
             std::cerr << "Erreur : webcam non accessible\n";

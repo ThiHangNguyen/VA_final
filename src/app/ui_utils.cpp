@@ -12,8 +12,8 @@
 
 float getUIScale(int windowWidth, int windowHeight) {
     // Résolution de référence: 720×540 (Full HD)
-    const float REF_WIDTH = 720.0f;
-    const float REF_HEIGHT = 540.0f;
+    const float REF_WIDTH = 1920;
+    const float REF_HEIGHT = 1080;
 
     // Calcul du scale par rapport à la hauteur (plus stable que largeur)
     float scaleH = static_cast<float>(windowHeight) / REF_HEIGHT;

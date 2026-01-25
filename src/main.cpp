@@ -103,15 +103,15 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         // ==========================================
         
         // 1. Physique (Speed & Bounce)
-        float gameAccel = 2000.0f; // Valeur EARTH par défaut
-        float gameBounce = 0.55f;   // Valeur EARTH par défaut
+        float gameAccel = 3000.0f; // Valeur EARTH par défaut
+        float gameBounce = 0.95f;   // Valeur EARTH par défaut
 
         if (cfg.speedMode == PhysicsMode::MOON) {
-            gameAccel = 500.0f; // Gravité faible
+            gameAccel = 4000.0f; // Gravité faible
             std::cout << "[PHYSICS] Mode MOON Speed (Lent)\n";
         }
         if (cfg.bounceMode == PhysicsMode::MOON) {
-            gameBounce = 0.95f; // Rebond très fort
+            gameBounce = 1.2f; // Rebond très fort
             std::cout << "[PHYSICS] Mode MOON Bounce (Elastique)\n";
         }
         glm::vec3 wallColor;  // variable pour la couleur du mur 
@@ -338,9 +338,6 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
 
             if (!cap.read(frameBGR) || frameBGR.empty()) break;
 
-            // === DETECTION DE FLOU ===
-            // On mesure la netteté de l'image pour avertir l'utilisateur
-            // et éviter les fausses détections quand l'image est trop floue
             const double BLUR_THRESHOLD = 100.0; // Seuil de netteté (ajustable)
             double sharpness = detect::measureBlur(frameBGR);
             bool imageIsBlurry = sharpness < BLUR_THRESHOLD;
@@ -353,8 +350,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
             if (!imageIsBlurry) {
                 okDetect = detect::detectA4Corners(frameBGR, imagePts);
             } else {
-                // Image floue : on garde les dernières coordonnées valides
-                // (la fonction detectA4Corners gère déjà la persistance avec MAX_LOST_FRAMES)
+
                 okDetect = detect::detectA4Corners(frameBGR, imagePts);
             }
 
@@ -472,7 +468,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
             glfwPollEvents();
 
             // --- Gestion Touche 'V' (Toggle AR/VR) ---
-            bool currentVPressed = (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS);
+            bool currentVPressed = !(glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS);
             if (currentVPressed && !lastVPressed) {
                 isVR = !isVR; // On inverse le mode (AR -> VR ou VR -> AR)
                 std::cout << "Mode change: " << (isVR ? "VR" : "AR") << std::endl;
@@ -544,10 +540,6 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
             if (!gameFinished) {
                 drawTargetCircle(targetPos, 15.0f, P, V, renderCtx.solidProgram, solid_uMVP, solid_uColor);
             }
-
-            // === AXES ===
-            drawCoordinateAxes(renderCtx, P, V, line_uMVP, line_uColor, line_uViewport, line_uThickness, fbw, fbh, THICKNESS_PX);
-
             // === AFFICHAGE SCORE (Temps) avec scaling automatique ===
             float uiScale = getUIScale(fbw, fbh);
 
@@ -558,23 +550,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
 
 
             glfwSwapBuffers(window);
-            /*
-            if (stepByStep) {
-                    bool nextFrame = false;
-                    while (!nextFrame && !glfwWindowShouldClose(window)) {
-                        glfwPollEvents(); // Nécessaire pour détecter les touches
-                        
-                        // Si on appuie sur 'S'
-                        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-                            nextFrame = true;
-                            // On attend un court instant pour éviter de sauter 10 frames d'un coup
-                            std::this_thread::sleep_for(std::chrono::milliseconds(200)); 
-                        }
-                        
-                        // On permet aussi de quitter ou de gérer la pause classique ici
-                        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) break;
-                    }
-                }*/
+
         }
 
         // --- Nettoyage des ressources ---
