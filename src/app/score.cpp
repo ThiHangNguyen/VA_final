@@ -82,9 +82,9 @@ static void drawStars(float cx, float cy, float radius, float time, int count) {
 // Convertit la difficulté en texte
 static std::string difficultyToString(game::Difficulty diff) {
     switch (diff) {
-        case game::Difficulty::EASY:   return "FACILE";
-        case game::Difficulty::MEDIUM: return "MOYEN";
-        case game::Difficulty::HARD:   return "DIFFICILE";
+        case game::Difficulty::EASY:   return "EASY";
+        case game::Difficulty::MEDIUM: return "MEDIUM";
+        case game::Difficulty::HARD:   return "HARD";
         default: return "???";
     }
 }

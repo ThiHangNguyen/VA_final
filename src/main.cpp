@@ -1,11 +1,38 @@
-#include <GL/glew.h>   
-#include <GLFW/glfw3.h>            // GLFW pour la gestion de la fenêtre et du contexte OpenGL
-#include <opencv2/opencv.hpp>      // OpenCV pour traitement d'image et capture vidéo
-#include <glm/glm.hpp>             // GLM pour les opérations matricielles (maths 3D)
+/**
+ * @file main.cpp
+ * @brief Point d'entrée principal du jeu de labyrinthe en réalité augmentée.
+ *
+ * Ce fichier contient la boucle de jeu principale qui orchestre :
+ * - La capture vidéo (webcam ou fichier)
+ * - La détection de la feuille A4 (marqueur AR)
+ * - Le calcul de la pose 3D (solvePnP)
+ * - La simulation physique de la bille
+ * - Le rendu OpenGL (murs, balle, ombres)
+ * - L'affichage du HUD (FPS, temps, pause)
+ *
+ * Architecture du programme :
+ * ```
+ * main()
+ *   └── showMenuWindow()     // Menu de sélection (difficulté, thème)
+ *         └── runApp()       // Boucle de jeu principale
+ *               ├── Détection A4 (detect::detectA4Corners)
+ *               ├── Estimation pose (cv::solvePnP)
+ *               ├── Physique (ar::updatePhysics)
+ *               └── Rendu OpenGL (drawWalls, drawBall, etc.)
+ * ```
+ *
+ * @author Thi Hang NGUYEN & Bichoy DAOUD
+ * @date 2024
+ */
+
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
+#include <opencv2/opencv.hpp>
+#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <thread> // Pour std::this_thread::sleep_for
-#include <chrono> // Pour std::chrono::milliseconds
+#include <thread>
+#include <chrono>
 
 #include "ar/calib.hpp"           // Chargement des paramètres de calibration
 #include "ar/pose.hpp"            // Projection / View OpenGL à partir de rvec/tvec
@@ -21,7 +48,9 @@
 #include "app/init.hpp"           // Initialisation OpenGL
 #include "app/input.hpp"          // Parsing des arguments d'entrée
 #include "app/game.hpp"           // Gestion des états de l'application
-#include "app/score.hpp"
+#include "app/score.hpp"          // Affichage de l'écran de score
+#include "app/assets.hpp"         // Chargement des textures par thème
+#include "app/hud.hpp"            // Affichage HUD (pause, FPS, temps)
 
 #include "game/maze.hpp"          // Génération du labyrinthe
 
@@ -30,6 +59,18 @@
 #include <vector>
 #include <string>
 
+/**
+ * @brief Exécute une partie de jeu complète.
+ *
+ * Cette fonction initialise tous les composants nécessaires (vidéo, OpenGL,
+ * physique, labyrinthe) puis lance la boucle de jeu. Elle retourne quand
+ * le joueur gagne, quitte, ou qu'une erreur survient.
+ *
+ * @param argc Nombre d'arguments de la ligne de commande.
+ * @param argv Arguments de la ligne de commande.
+ * @param config Configuration du jeu (difficulté, thème, physique).
+ * @return GameResult Résultat de la partie (WIN, QUIT, ERROR) avec le temps.
+ */
 GameResult runApp(int argc, char** argv, AppConfig& config) {
     GameResult result= { EndReason::QUIT, 0.0, config.difficulty };
     bool gameFinished = false;
@@ -216,33 +257,10 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         GLint sh_uColor = glGetUniformLocation(shadowProgram, "uColor");
 
         // === CHARGEMENT ASSETS DYNAMIQUE ===
-        // On construit le chemin du dossier : data/design_1, data/design_2, etc.
-        std::string themePath = "../data/design_" + std::to_string((int)cfg.designTheme) + "/";
-        std::cout << "[DESIGN] Chargement depuis : " << themePath << "\n";
-
-        // 1. Balle
-        cv::Mat ballImg = cv::imread(themePath + "balle.png");
-        if(ballImg.empty()) { // Fallback si le dossier n'existe pas encore
-            std::cerr << "WARN: Texture balle introuvable, chargement default.\n";
-            ballImg = cv::imread("../data/design_1/balle.png");
-        }
-        if(!ballImg.empty()) cv::cvtColor(ballImg, ballImg, cv::COLOR_BGR2RGB);
-        GLuint ballTextureID = glx::createTextureFromMat(ballImg.empty() ? frameRGBA : ballImg);
-
-        // 2. Sol
-        cv::Mat grassImg = cv::imread(themePath + "sol.png");
-        if(grassImg.empty()) grassImg = cv::imread("../data/design_1/sol.png");
-        if(!grassImg.empty()) cv::cvtColor(grassImg, grassImg, cv::COLOR_BGR2RGB);
-        GLuint grassTexID = glx::createTextureFromMat(grassImg.empty() ? frameRGBA : grassImg);
-
-        // 3. Ciel (Attention extension .jpg dans ta capture)
-        cv::Mat skyImg = cv::imread(themePath + "ciel.jpg");
-        if(skyImg.empty()) skyImg = cv::imread("../data/design_1/ciel.jpg");
-        if(!skyImg.empty()) { 
-            cv::cvtColor(skyImg, skyImg, cv::COLOR_BGR2RGB); 
-            cv::flip(skyImg, skyImg, 0); 
-        }
-        GLuint skyTexID = glx::createTextureFromMat(skyImg.empty() ? frameRGBA : skyImg);
+        app::ThemeAssets themeAssets = app::loadThemeAssets(cfg.designTheme, frameRGBA);
+        GLuint ballTextureID = themeAssets.ballTexture;
+        GLuint grassTexID = themeAssets.groundTexture;
+        GLuint skyTexID = themeAssets.skyTexture;
         // =========================
         
         // D. Mesh pour le sol en VR (Un simple rectangle)
@@ -387,77 +405,21 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
                     gameBounce
                 );
             }
+            // === AFFICHAGE HUD (messages et indicateurs) ===
             if (!okDetect) {
-                // AFFICHER LE MESSAGE SI PAS DE DETECTION
-                std::string msg = "Pas de A4 detecte ! Placez la feuille...";
-                int baseline = 0;
-                cv::Size textSize = cv::getTextSize(msg, cv::FONT_HERSHEY_SIMPLEX, 1.0, 2, &baseline);
-
-                // Centrer le texte
-                cv::Point textOrg((frameBGR.cols - textSize.width) / 2, (frameBGR.rows + textSize.height) / 2);
-
-                // Fond noir semi-transparent pour lisibilité
-                cv::rectangle(frameBGR, textOrg + cv::Point(0, baseline), textOrg + cv::Point(textSize.width, -textSize.height), cv::Scalar(0,0,0), -1);
-                // Texte blanc
-                cv::putText(frameBGR, msg, textOrg, cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
+                app::drawCenteredMessage(frameBGR, "Pas de A4 detecte ! Placez la feuille...");
             }
-
-            // === AFFICHAGE AVERTISSEMENT FLOU ===
-            // Afficher seulement si l'image est floue ET que la détection échoue
             if (imageIsBlurry && !okDetect) {
-                std::string blurMsg = "Image floue ! Stabilisez la camera...";
-                int baseline = 0;
-                cv::Size textSize = cv::getTextSize(blurMsg, cv::FONT_HERSHEY_SIMPLEX, 0.8, 2, &baseline);
-
-                // Afficher en bas de l'écran
-                cv::Point textOrg((frameBGR.cols - textSize.width) / 2, frameBGR.rows - 30);
-
-                // Fond rouge semi-transparent pour attirer l'attention
-                cv::rectangle(frameBGR,
-                    textOrg + cv::Point(-10, baseline + 5),
-                    textOrg + cv::Point(textSize.width + 10, -textSize.height - 5),
-                    cv::Scalar(0, 0, 100), -1);
-                // Texte blanc
-                cv::putText(frameBGR, blurMsg, textOrg, cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+                app::drawWarningMessage(frameBGR, "Image floue ! Stabilisez la camera...");
             }
-
-            // === AFFICHAGE HUD (sur la frame vidéo) ===
-
-            // Affichage PAUSE (en haut au milieu)
             if (paused) {
-                std::string pauseMsg = "PAUSE. Espace/Echap -> reprendre/quitter.";
-                int baseline = 0;
-                cv::Size textSize = cv::getTextSize(pauseMsg, cv::FONT_HERSHEY_SIMPLEX, 1.2, 3, &baseline);
-                cv::Point pos((frameBGR.cols - textSize.width) / 2, 40);
-
-                // Fond noir pour lisibilité
-                cv::rectangle(frameBGR,
-                    pos + cv::Point(-10, baseline + 5),
-                    pos + cv::Point(textSize.width + 10, -textSize.height - 5),
-                    cv::Scalar(0, 0, 0), -1);
-                // Texte jaune
-                cv::putText(frameBGR, pauseMsg, pos, cv::FONT_HERSHEY_SIMPLEX, 1.2, cv::Scalar(0, 255, 255), 3);
+                app::drawPauseOverlay(frameBGR);
             }
-
-            // Affichage FPS (coin haut gauche)
             if (showFPS) {
-                char fpsText[32];
-                snprintf(fpsText, sizeof(fpsText), "FPS: %.1f", currentFPS);
-                cv::putText(frameBGR, fpsText, cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 0), 2);
+                app::drawFPS(frameBGR, currentFPS);
             }
-
-            // Affichage Temps (coin haut droit)
             if (showTime && !gameFinished) {
-                int mins = (int)currentTime / 60;
-                int secs = (int)currentTime % 60;
-                int ms = (int)((currentTime - (int)currentTime) * 100);
-                char timeText[32];
-                snprintf(timeText, sizeof(timeText), "%02d:%02d.%02d", mins, secs, ms);
-
-                int baseline = 0;
-                cv::Size textSize = cv::getTextSize(timeText, cv::FONT_HERSHEY_SIMPLEX, 0.8, 2, &baseline);
-                cv::Point pos(frameBGR.cols - textSize.width - 10, 30);
-                cv::putText(frameBGR, timeText, pos, cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 0), 2);
+                app::drawTimer(frameBGR, currentTime);
             }
 
             // -- Mise à jour de la texture de fond ---
@@ -554,8 +516,7 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         }
 
         // --- Nettoyage des ressources ---
-        glDeleteTextures(1, &grassTexID);
-        glDeleteTextures(1, &skyTexID);
+        app::freeThemeAssets(themeAssets);
         glDeleteVertexArrays(1, &floorMesh.vao); glDeleteBuffers(1, &floorMesh.vbo);
 
         // --- Nettoyage OpenGL ---
@@ -577,28 +538,41 @@ GameResult runApp(int argc, char** argv, AppConfig& config) {
         
     }
 
-    
+/**
+ * @brief Point d'entrée principal de l'application.
+ *
+ * Gère la boucle menu/jeu/score :
+ * 1. Affiche le menu principal (showMenuWindow)
+ * 2. Lance une partie (runApp)
+ * 3. Affiche le score si victoire (showScoreWindow)
+ * 4. Retourne au menu ou relance une partie
+ *
+ * @param argc Nombre d'arguments CLI.
+ * @param argv Arguments CLI (--video, --calib, etc.).
+ * @return 0 si succès, autre valeur si erreur.
+ */
 int main(int argc, char** argv) {
     AppConfig config;
-    // On définit des valeurs par défaut ou on les récupère
 
-
+    // === BOUCLE MENU PRINCIPAL ===
     while (true) {
+        // Affichage du menu de sélection
         if (!showMenuWindow(config)) break;
 
+        // === BOUCLE DE JEU ===
         bool stayInGame = true;
         while (stayInGame) {
             GameResult result = runApp(argc, argv, config);
 
             if (result.reason == EndReason::WIN) {
+                // Victoire : afficher l'écran de score
                 int choice = showScoreWindow(result);
-
                 if (choice == 1) stayInGame = false; // Retour Menu
-                // choice == 0 -> Rejouer, on reste dans la boucle
+                // choice == 0 -> Rejouer
             } else if (result.reason == EndReason::QUIT) {
                 stayInGame = false; // Retour au menu principal
             } else {
-                stayInGame = false; // Erreur ou autre
+                stayInGame = false; // Erreur
             }
         }
     }

@@ -27,11 +27,13 @@ add_executable(AR_A4_Video
   src/main.cpp
 
   src/app/init.cpp
-  src/app/input.cpp 
+  src/app/input.cpp
   src/app/score.cpp
   src/app/menu.cpp
   src/app/setting.cpp
   src/app/ui_utils.cpp
+  src/app/assets.cpp
+  src/app/hud.cpp
   
   src/ar/calib.cpp
   src/ar/render.cpp
@@ -39,7 +41,6 @@ add_executable(AR_A4_Video
   src/ar/physics.cpp
   src/ar/filter.cpp
   src/detect/a4.cpp
-  src/detect/tracking.cpp
   src/glx/mesh.cpp
   src/glx/shaders.cpp
   src/glx/texture.cpp
